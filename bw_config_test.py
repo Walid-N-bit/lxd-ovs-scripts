@@ -13,7 +13,7 @@ import signal
 
 INGRESS_RATE = 0  # Kbps
 HOST_IP = "10.0.0.1"
-DATA_PATH = "ovs_ingress_policing_data"
+DATA_PATH = "ovs_ipr_data"
 BANDWIDTH_COLUMNS = [
     "timestamp",
     "host_ip",
@@ -208,7 +208,7 @@ def get_ovs_conf(arg: str):
         return row
 
 
-def get_device_ipr(ip: str):
+def get_device_ipr_hostname(ip: str):
     """
     look for device with ip passed as param
     return ingress_policing_rate of that device
@@ -221,7 +221,8 @@ def get_device_ipr(ip: str):
         (row.get("ingress_policing_rate") for row in ovs_data if row.get("ipv4") == ip),
         None,
     )
-    return device, int(ipr)
+    hostname = cmd("hostname").split(".")[0]
+    return device, int(ipr), hostname
 
 
 ########## send dd nc packets ##########
@@ -296,7 +297,8 @@ def perform_test(inputs: dict):
             path = "/".join(
                 [
                     DATA_PATH,
-                    f"{get_device_ipr(HOST_IP)[0]}_ipr_{get_device_ipr(HOST_IP)[1]}.csv",
+                    f"{get_device_ipr_hostname(HOST_IP)[2]}",
+                    f"{get_device_ipr_hostname(HOST_IP)[0]}_ipr_{get_device_ipr_hostname(HOST_IP)[1]}.csv",
                 ]
             )
             save2csv(path=path, data=data_row, headers=BANDWIDTH_COLUMNS)
