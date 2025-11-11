@@ -1,3 +1,0 @@
-interface,bridge,ipv4,ingress_policing_rate,ingress_policing_burst
-test0,br0,10.0.0.1,0.0,0.0
-test1,br0,"Device ""test1"" does not exist.",0.0,0.0
