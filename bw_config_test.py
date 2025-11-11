@@ -235,7 +235,7 @@ def packet_nbr_msg(packets: list):
     input: [start, step, end]
     """
     pkt_nbr = int((packets[2] - packets[0]) / packets[1])
-    seconds = pkt_nbr * NC_TOUT
+    seconds = pkt_nbr * (NC_TOUT + 1)
     minutes, sec = divmod(seconds, 60)
     h, mins = divmod(minutes, 60)
     print("_____________________________________\n\n")
@@ -266,6 +266,8 @@ def perform_test(inputs: dict):
     port = inputs.get("port")
     repetitions = inputs.get("repetitions")
     packet_nbr_msg([start, step, end])
+
+    start_time = datetime.now()
 
     for size in range(start, end, step):
         for _ in range(repetitions):
@@ -306,6 +308,10 @@ def perform_test(inputs: dict):
 
             print(f"-> {size} bytes: {mbps or 'N/A'} Mbps ({summary_line})")
             # time.sleep(1)
+    # message at the end
+    end_time = datetime.now()
+    print(f"\n====== Data saved in {path} ======\n")
+    print(f"\n________ Elapsed time: {end_time - start_time} ________\n")
 
 
 ########### profiles ###########
