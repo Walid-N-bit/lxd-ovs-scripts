@@ -85,7 +85,7 @@ def update_csv(path: str, data: list):
     if file_exists:
         with open(path, "a", newline="") as f:
             writer = csv.writer(f)
-            for row in writer:
+            for row in data:
                 writer.writerow(row)
     else:
         return "Specified path does not exist"
@@ -153,6 +153,9 @@ def parse_dd_output(output: str):
 
 
 def cmd(input: str) -> str:
+    """
+    take input and run as a command. return output.
+    """
     proc = proc = subprocess.Popen(
         input, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, text=True
     )
@@ -164,6 +167,9 @@ def cmd(input: str) -> str:
 
 
 def get_ipv4(device: str) -> str:
+    """
+    get ipv4 of a device by its name. return ip as a string
+    """
     inp = (
         r"ip a show dev "
         + device
@@ -211,8 +217,8 @@ def get_ovs_conf(arg: str):
 
 def get_device_ipr_hostname(ip: str):
     """
-    look for device with ip passed as param
-    return ingress_policing_rate of that device
+    take ipv4 of an interface
+    return device name, ingress_policing_rate, hostname
     """
     ovs_data = get_ovs_conf(True)
     device = next(
@@ -229,13 +235,13 @@ def get_device_ipr_hostname(ip: str):
 ########## send dd nc packets ##########
 
 
-def packet_nbr_msg(packets: list):
+def packet_nbr_msg(packets: list, reps: int):
     """
     compute the total number of packets to be sent
     input: [start, step, end]
     """
     pkt_nbr = int((packets[2] - packets[0]) / packets[1])
-    seconds = pkt_nbr * (NC_TOUT + 1)
+    seconds = pkt_nbr * (NC_TOUT + 1) * reps
     minutes, sec = divmod(seconds, 60)
     h, mins = divmod(minutes, 60)
     print("_____________________________________\n\n")
@@ -265,7 +271,7 @@ def perform_test(inputs: dict):
     dst_ip = inputs.get("dst_ip")
     port = inputs.get("port")
     repetitions = inputs.get("repetitions")
-    packet_nbr_msg([start, step, end])
+    packet_nbr_msg([start, step, end], repetitions)
 
     start_time = datetime.now()
 
