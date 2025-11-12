@@ -13,7 +13,7 @@ import signal
 from tabulate import tabulate
 
 INGRESS_RATE = 0  # Kbps
-HOST_IP = "10.0.0.1"
+HOST_IP = ""
 DATA_PATH = "ovs_ipr_data"
 BANDWIDTH_COLUMNS = [
     "timestamp",
