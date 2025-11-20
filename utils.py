@@ -109,7 +109,7 @@ def delete_file(path: str):
     if os.path.exists(path):
         os.remove(path)
     else:
-        print(f"{path} does not exist ❌")
+        print(f"Error: {path} does not exist")
 
 
 def is_installed(package: str):
@@ -119,3 +119,15 @@ def is_installed(package: str):
     """
     out = cmd(f"sudo {package} --version")
     return not ("command not found" in out.lower())
+
+
+def lxc_cmd(vm_name: str, command: str):
+    """
+    execute a command inside a given VM or container from the host.
+    """
+    input = f"sudo lxc exec {vm_name} -- {command}"
+    out = cmd(input)
+    return out
+
+
+### Note: ssh tunneling from desktop machines to gateway to make http requests is possible!!!
