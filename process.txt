@@ -1,0 +1,21 @@
+- store data of VMs in a host machine:
+    vm_names, vm_ipv4s
+- building:
+    1. create bridges
+    2. create containers
+    3. store data:
+        vm_name, ovs_brs, lxd_cont_names, lxd_cont_ipv4s
+    4. vxlans
+    5. store data:
+        vxlan, point_a, point_b, port_nbr
+    6. create QoS for each container port
+    7. create queues for each QoS
+    8. store data:
+        qos_id, qos_default_rate, port, queues(nbr, max_rate)
+    9. connect all brs (mesh config?) -> create intents between VMs
+    10. test network:
+        - create intent between two nodes
+        - send/measure traffic both ways
+        - delete intent
+        - rinse and repeat
+    

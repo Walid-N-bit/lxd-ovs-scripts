@@ -6,12 +6,25 @@ import os
 import csv
 import subprocess
 import signal
-from typing import Callable
+from typing import Callable, Literal
 from datetime import datetime
+import re
+import json
 
 
 TIME = datetime.now().strftime("%d-%m-%Y_%Hh-%Mm")
 DFLT_LOG_PATH = f"logs/{TIME}.txt"
+SYS_DATA = "sys_data.json"
+
+
+def file_exists(path: str):
+    """
+    create path directory if it doesn't exist.
+    check if path file exists or not. return true if exists, false otherwise.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    file_exists = os.path.exists(path)
+    return file_exists
 
 
 def save_to_csv(path: str, data: list[list], headers: list[str]):
@@ -20,11 +33,10 @@ def save_to_csv(path: str, data: list[list], headers: list[str]):
     create file if it doesn't exist.
     append data rows to csv file.
     """
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    file_exists = os.path.exists(path)
+    f_exists = file_exists(path)
     with open(path, "a", newline="") as f:
         writer = csv.writer(f)
-        if not file_exists:
+        if not f_exists:
             writer.writerow(headers)
         for row in data:
             writer.writerow(row)
@@ -35,9 +47,9 @@ def load_csv_data(path: str):
     read data from csv in path.
     return as list of lists.
     """
-    file_exists = os.path.exists(path)
+    f_exists = file_exists(path)
     data = []
-    if file_exists:
+    if f_exists:
         with open(path, "r", newline="") as f:
             reader = csv.reader(f)
             for row in reader:
@@ -128,6 +140,88 @@ def lxc_cmd(vm_name: str, command: str):
     input = f"sudo lxc exec {vm_name} -- {command}"
     out = cmd(input)
     return out
+
+
+def get_host_id(mode: Literal["local", "vm"], vm: str = ""):
+    """
+    get the id number of a host. The rightmost number in a IPv4.
+    e.g.: 10.0.200.42 -> host_id = 42
+    must provide a virtual-machine name when using vm mode.
+    only works if the interface has the pattern: 10.0.<number>.<number>
+    """
+    host_id = ""
+    out = ""
+    if mode == "local":
+        out = cmd("hostname -I")
+    elif mode == "vm":
+        out = lxc_cmd(vm, "hostname -I")
+
+    out_ips = out.split(" ")
+    ip_pattern = r"^10\.0\.\d{1,3}\.(\d{1,3})$"
+    for ip in out_ips:
+        match = re.search(ip_pattern, ip)
+        if match:
+            host_id = match.group(1)
+
+    return host_id
+
+
+# ========= json helper functions ========= #
+
+def save_json_file(data: json, path: str = SYS_DATA):
+    """
+    save data into a json file
+    """
+    # f_exists = file_exists(path)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=3)
+
+
+def read_json_file(path: str = SYS_DATA):
+    """
+    return data from json file for given path.
+    """
+    with open(path, "r") as f:
+        data = json.load(f)
+    return data
+
+
+def search_json_file(
+    key: str,
+    value: str | int,
+    path: str = SYS_DATA,
+):
+    """
+    find a json item = {key: value} in path
+    """
+    data = read_json_file(path)
+    result = next((item for item in data if item[key] == value), None)
+    return result
+
+
+def edit_json_file(key: str, value: str | int, new_item: dict, path: str = SYS_DATA):
+    """
+    change a json item in path.
+    """
+    data = read_json_file(path)
+    new_data = []
+    for item in data:
+        if item[key] == value:
+            item = new_item
+        new_data.append(item)
+    save_json_file(data=new_data, path=path)
+
+
+def del_json_item(key: str, value: str | int, path: str = SYS_DATA):
+    """
+    remove an item in json file in path.
+    """
+    data = read_json_file(path)
+    new_data = []
+    for item in data:
+        if item[key] != value:
+            new_data.append(item)
+    save_json_file(data=new_data, path=path)
 
 
 ### Note: ssh tunneling from desktop machines to gateway to make http requests is possible!!!

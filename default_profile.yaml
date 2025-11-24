@@ -26,7 +26,7 @@ config:
 devices:
   eth0:
     nictype: bridged
-    parent: br0
+    parent: ovs_br
     type: nic
   eth1:
     nictype: bridged

@@ -38,6 +38,7 @@ def create_temp_profile(file: str):
 def edit_yaml(
     host_id: int,
     vlan_id: int,
+    ovs_br: str,
     path: str = DFLT_PROFILE,
 ):
     """
@@ -61,6 +62,7 @@ def edit_yaml(
         .replace("vlan_iface", f"vlan{vlan_id}")
         .replace("vlan_id", f"{vlan_id}")
         .replace("vlan_host", f"{host_id}")
+        .replace("ovs_br", f"{ovs_br}")
     )
     print(f"Creating profile for 10.0.{vlan_id}.{host_id}...", end=" ")
     out = cmd(f"sudo yq -i -Y '.config.\"user.network-config\"={new_config}' {profile}")
@@ -69,3 +71,10 @@ def edit_yaml(
         return 0
     else:
         return f"{profile} for host {host_id} vlan{vlan_id} successfully created ✅"
+
+def list_conts(vm:str):
+    """
+    return list of lxc containers in a host and their IP addresses.
+    """
+    out = lxc_cmd(vm_name=vm, command="sudo lxc list")
+    return out
