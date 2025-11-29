@@ -90,3 +90,48 @@ def add_queue_of(br: str, in_port: int, queue: str):
     """
     input = f"sudo ovs-ofctl add-flow {br} in_port={in_port},actions=set_queue:{queue},normal"
     return input
+
+# ===== execution functions ===== #
+####### functions that execute and create data objects #######
+
+
+def create_brs_for_vm(vm_name: str, controller: str = "", br_nbr: int = 1):
+    """
+    create bridges for a VM.
+    naming schema: br-<host_id>-<bridge_id>
+        host_id: unique to every host in the network. the right-most number in IPv4
+        bridge_id: 0, 1, 2, ...
+    """
+    data = {}
+    input = ""
+    brs = []  # bridges to be created in the vm
+    host_id = get_host_id(mode="vm", vm=vm_name)
+
+    for i in range(br_nbr):
+        brs.append(f"br-{host_id}-{i}")
+
+    for br in brs:
+        # send command to create bridge in VM from host machine
+        disp_msg = f"Creating OVS Bridge {br} in {vm_name} ... "
+        print(disp_msg)
+        if controller != "":
+            input = create_ovs_br_cmd(br=br, controller=controller)
+        else:
+            input = create_ovs_br_cmd(br=br)
+
+        br_out = lxc_cmd(vm_name, command=input)
+        save_logs([disp_msg, br_out])
+
+    check = lxc_cmd(vm_name, f"{VSCTL} show")
+    data = {}
+    print(check)
+    save_logs([check])
+
+
+def create_vxlans():
+    """
+    creates two vxlans, one for each end.
+    get ipv4 of both ends, create a vxlan with th same name (for clarity) on both bridges.
+    """
+
+    pass

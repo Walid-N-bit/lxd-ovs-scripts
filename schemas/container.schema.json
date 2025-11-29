@@ -1,0 +1,15 @@
+{
+    "$id": "container.schema.json",
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string"
+        },
+        "ipv4": {
+            "type": "string"
+        },
+        "vlan": {
+            "type": "string"
+        }
+    }
+}

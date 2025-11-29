@@ -1,0 +1,18 @@
+{
+    "$id": "port.schema.json",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "ifaces": {
+                "type": "array",
+                "items": {
+                    "$ref": "iface.schema.json"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,40 @@
+{
+    "$id": "iface.schema.json",
+    "type": "array",
+    "items": {
+        "properties": {
+            "container": {
+                "$ref": "container.schema.json"
+            },
+            "id": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "mac": {
+                "type": "string"
+            },
+            "ofport": {
+                "type": "string"
+            },
+            "ingress_policing_rate": {
+                "type": "number",
+                "default": 0
+            },
+            "ingress_policing_burst": {
+                "type": "number",
+                "default": 0
+            },
+            "ptype": {
+                "type": "string"
+            },
+            "mtu": {
+                "type": "number"
+            },
+            "qos":{
+                "$ref": "qos.schema.json"
+            }
+        }
+    }
+}

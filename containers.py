@@ -8,6 +8,9 @@ DFLT_SERVER = "ubuntu"
 DFLT_IMAGE = "24.04"
 DFLT_PROFILE = "default_profile.yaml"
 
+# ===== command functions ===== #
+# functions that return executable commands as strings #
+
 
 def create_container(
     name: str, profile: str = "", server: str = DFLT_SERVER, image: str = DFLT_IMAGE
@@ -72,9 +75,28 @@ def edit_yaml(
     else:
         return f"{profile} for host {host_id} vlan{vlan_id} successfully created ✅"
 
-def list_conts(vm:str):
+
+def list_conts(vm: str):
     """
     return list of lxc containers in a host and their IP addresses.
     """
     out = lxc_cmd(vm_name=vm, command="sudo lxc list")
     return out
+
+
+# ===== execution functions ===== #
+####### functions that execute and create data objects #######
+
+
+def create_conts_for_br(vm: str, br: str, cont_ids: list, vlan: int):
+    """
+    create LXD containers for an ovs bridge.
+    naming scheme: cont-<cont_id>
+    """
+    # in each loop create a new temp profile for a container id
+    for id in cont_ids:
+        prfl_name = edit_yaml(host_id=id, vlan_id=vlan, ovs_br=br)
+        cont_out = create_container(name=f"cont-{id}", profile=prfl_name)
+        check = list_conts(vm=vm)
+        print(check)
+        save_logs([cont_out])

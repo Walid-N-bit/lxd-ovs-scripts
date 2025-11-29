@@ -1,0 +1,25 @@
+{
+    "$id": "qos.schema.json",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "string"
+        },
+        "max_rate": {
+            "type": "number"
+        },
+        "queues": {
+            "type": "array",
+            "items": {
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "max_rate": {
+                        "type": "number"
+                    }
+                }
+            }
+        }
+    }
+}
