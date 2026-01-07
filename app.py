@@ -123,6 +123,12 @@ def update_container_data():
 
 
 def update_vxlan_data():
+    """
+    get info about VXLANs then update their data.
+
+    :return: Description
+    :rtype: Literal[True]
+    """
     all_vxlans = get_vxlans()
     bridges = get_ovs_brs()
     vxlan_data = []
