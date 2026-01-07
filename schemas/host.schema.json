@@ -1,0 +1,29 @@
+{
+    "$id": "host.schema.json",
+    "type": "object",
+    "properties": {
+        "hostname": {
+            "type": "string"
+        },
+        "ip_addresses": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "iface": {
+                        "type": "string"
+                    },
+                    "ipv4": {
+                        "type": "string"
+                    },
+                    "vlan": {
+                        "type": "string"
+                    },
+                    "mtu": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

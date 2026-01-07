@@ -14,7 +14,10 @@ import json
 
 TIME = datetime.now().strftime("%d-%m-%Y_%Hh-%Mm")
 DFLT_LOG_PATH = f"logs/{TIME}.txt"
-SYS_DATA = "sys_data.json"
+
+
+# def data_file_name(prefix: str):
+#     return f"{prefix}_{TIME}"
 
 
 def file_exists(path: str):
@@ -27,7 +30,7 @@ def file_exists(path: str):
     return file_exists
 
 
-def save_to_csv(path: str, data: list[list], headers: list[str]):
+def save_to_csv(path: str, data: list[list] | list[tuple], headers: list[str] | tuple):
     """
     create new directory if it doesn't exist.
     create file if it doesn't exist.
@@ -63,10 +66,39 @@ def cmd(input: str) -> str:
     """
     take input and run as a command. return output.
     """
-    proc = proc = subprocess.Popen(
+    proc = subprocess.Popen(
         input, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, text=True
     )
     out, _ = proc.communicate()
+    return out
+
+
+async def async_cmd(input: str) -> str:
+    """
+    take input and run as a command. return output.
+    """
+    proc = subprocess.Popen(
+        input, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, text=True
+    )
+    out, _ = proc.communicate()
+    return out
+
+
+def lxc_cmd(vm_name: str, command: str):
+    """
+    execute a command inside a given VM or container from the host.
+    """
+    input = f"sudo lxc exec {vm_name} -- {command}"
+    out = cmd(input)
+    return out
+
+
+async def async_lxc_cmd(vm_name: str, command: str):
+    """
+    execute a command inside a given VM or container from the host.
+    """
+    input = f"sudo lxc exec {vm_name} -- {command}"
+    out = await async_cmd(input)
     return out
 
 
@@ -124,22 +156,143 @@ def delete_file(path: str):
         print(f"Error: {path} does not exist")
 
 
-def is_installed(package: str):
+def is_installed(package: str, vm: str = ""):
     """
     return True if Linux package is installed.
     return False otherwise.
     """
-    out = cmd(f"sudo {package} --version")
-    return not ("command not found" in out.lower())
+    output = ""
+    if vm != "":
+        output = lxc_cmd(vm_name=vm, command=f"sudo {package} --version")
+    else:
+        output = cmd(f"sudo {package} --version")
+    return not ("not found" in output.lower())
 
 
-def lxc_cmd(vm_name: str, command: str):
+# ========= json helper functions ========= #
+
+
+def save_json_file(data: json, path: str):
     """
-    execute a command inside a given VM or container from the host.
+    save data into a json file
     """
-    input = f"sudo lxc exec {vm_name} -- {command}"
-    out = cmd(input)
-    return out
+    # f_exists = file_exists(path)
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)        
+    with open(path, "w") as f:
+        json.dump(data, f, indent=3)
+
+
+def read_json_file(path: str) -> list[dict]:
+    """
+    return data from json file for given path.
+    """
+    f_exists = file_exists(path)
+    if not f_exists:
+        save_json_file(data=[], path=path)
+    with open(path, "r") as f:
+        data = json.load(f)
+    return data
+
+
+def search_json_file(
+    key: str,
+    value: str | int,
+    path: str,
+) -> dict:
+    """
+    find a json item = {key: value} in path
+    """
+    data = read_json_file(path)
+    result = next((item for item in data if item[key] == value), None)
+    return result
+
+
+def update_json_file(key: str, value: str | int, new_item: dict, path: str):
+    """
+    change a json item in path.
+    if an item exists in the file, change it with the item passed as param.
+    else, add the item to the file.
+    """
+    data = read_json_file(path)
+    new_data = []
+    for item in data:
+        if item[key] == value:
+            # if item already exists in data
+            item = new_item
+        new_data.append(item)
+
+    if new_item not in data:
+        # if item doesn't exist in data
+        new_data.append(new_item)
+    save_json_file(data=new_data, path=path)
+
+
+def add_to_json_file(new_items: list[dict], path: str):
+    """
+    check a list of dict objects.
+    new objects are added to a json file, existing items are ignored
+
+    :param new_items: new data objects
+    :type new_items: list[dict]
+    :param path: targeted file
+    :type path: str
+    """
+    data = read_json_file(path)
+    for item in new_items:
+        item_exists = item in data
+        if not item_exists:
+            data.append(item)
+    save_json_file(data=data, path=path)
+
+
+def delete_json_item(key: str, value: str | int, path: str):
+    """
+    remove an item in json file.
+    """
+    data = read_json_file(path)
+    new_data = []
+    for item in data:
+        if item[key] != value:
+            new_data.append(item)
+    save_json_file(data=new_data, path=path)
+
+
+# ========= host info functions ========= #
+
+
+def get_hostname():
+    """
+    return the hostname for the host running this script
+    output: str
+    """
+    output = cmd(input="hostname")
+    return output.strip()
+
+
+def get_ipv4s():
+    """
+    return a list of the ips of interfaces of the host running this script
+    output: list[str]
+    """
+    output = cmd(input="hostname -I")
+    output_as_list = output.split(" ")
+    output_as_list.remove("\n")
+    return output_as_list
+
+
+def get_iface_data(ip: str) -> dict:
+    """
+    return a dict containing data of an interface with ipv4 passed as param
+
+    :param ip: interface's IPv4 address
+    :type ip: str
+    :return: Description
+    :rtype: dict
+    """
+    output = cmd(f"ip -j -d -p addr show to {ip}")
+    return json.loads(output)[0]
 
 
 def get_host_id(mode: Literal["local", "vm"], vm: str = ""):
@@ -157,71 +310,23 @@ def get_host_id(mode: Literal["local", "vm"], vm: str = ""):
         out = lxc_cmd(vm, "hostname -I")
 
     out_ips = out.split(" ")
-    ip_pattern = r"^10\.0\.\d{1,3}\.(\d{1,3})$"
     for ip in out_ips:
-        match = re.search(ip_pattern, ip)
-        if match:
-            host_id = match.group(1)
-
+        host_id = id_from_ipv4(ip=ip)
+        if host_id != "":
+            break
     return host_id
 
 
-# ========= json helper functions ========= #
-
-def save_json_file(data: json, path: str = SYS_DATA):
+def id_from_ipv4(ip: str):
     """
-    save data into a json file
+    isolate host ID from an IPv4 address
+    
+    :param ip: IPv4 address
+    :type ip: str
     """
-    # f_exists = file_exists(path)
-    with open(path, "w") as f:
-        json.dump(data, f, indent=3)
-
-
-def read_json_file(path: str = SYS_DATA):
-    """
-    return data from json file for given path.
-    """
-    with open(path, "r") as f:
-        data = json.load(f)
-    return data
-
-
-def search_json_file(
-    key: str,
-    value: str | int,
-    path: str = SYS_DATA,
-):
-    """
-    find a json item = {key: value} in path
-    """
-    data = read_json_file(path)
-    result = next((item for item in data if item[key] == value), None)
-    return result
-
-
-def edit_json_file(key: str, value: str | int, new_item: dict, path: str = SYS_DATA):
-    """
-    change a json item in path.
-    """
-    data = read_json_file(path)
-    new_data = []
-    for item in data:
-        if item[key] == value:
-            item = new_item
-        new_data.append(item)
-    save_json_file(data=new_data, path=path)
-
-
-def del_json_item(key: str, value: str | int, path: str = SYS_DATA):
-    """
-    remove an item in json file in path.
-    """
-    data = read_json_file(path)
-    new_data = []
-    for item in data:
-        if item[key] != value:
-            new_data.append(item)
-    save_json_file(data=new_data, path=path)
-
-
-### Note: ssh tunneling from desktop machines to gateway to make http requests is possible!!!
+    host_id = ""
+    ip_pattern = r"^10\.0\.\d{1,3}\.(\d{1,3})$"
+    match = re.search(ip_pattern, ip)
+    if match:
+        host_id = match.group(1)
+    return host_id

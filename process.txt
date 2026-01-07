@@ -19,3 +19,16 @@
         - delete intent
         - rinse and repeat
     
+    # Modified Process:
+
+    1. store host info
+        hostname, interfaces (ipv4, vlan, mtu)
+    2. create bridges in hosts, store data
+        br_name, hostname, controller
+    3. create containers in hosts, store data
+        name, ifaces(ipv4, vlan), br_name, ovs_port
+    4. create vxlans, store data
+        vxlan_name, br_name, host(name, ipv4), remote_host(name, ipv4)
+    5. create QoS, create queues for each QoS, store data
+        qos_id, tag, qos_default_rate, ports, queues(nbr, id, max_rate)
+    6. 

@@ -1,5 +1,10 @@
 *.csv
 __pycache__/
-playground.py 
+sandbox.py
+bw_config_test.py
 ovs_ipr_data/
 *venv/
+process.txt
+*data/
+logs/
+temp_default_profile.yaml

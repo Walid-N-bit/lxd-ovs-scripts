@@ -22,15 +22,10 @@ def create_container(
     input = f"sudo lxc init {server}:{image} {name}"
     if profile != "":
         input = f"sudo lxc init {server}:{image} {name} < {profile}"
-    print(f"Creating container {name}... ", end=" ")
+    print(f"Creating container {name}... ")
     output = cmd(input)
     print(f"Finished ✅")
     return output
-
-
-# def yq_version():
-#     yq_v = cmd("sudo yq --version")
-#     return "command not found" in yq_v
 
 
 def create_temp_profile(file: str):
@@ -65,18 +60,23 @@ def edit_yaml(
         .replace("vlan_iface", f"vlan{vlan_id}")
         .replace("vlan_id", f"{vlan_id}")
         .replace("vlan_host", f"{host_id}")
-        .replace("ovs_br", f"{ovs_br}")
     )
     print(f"Creating profile for 10.0.{vlan_id}.{host_id}...", end=" ")
-    out = cmd(f"sudo yq -i -Y '.config.\"user.network-config\"={new_config}' {profile}")
-    if len(out) > 0:
-        print("out")
+    out1 = cmd(
+        f"sudo yq -i -Y '.config.\"user.network-config\"={new_config}' {profile}"
+    )
+    # change the value for the bridge
+    out2 = cmd(f"sudo yq -i -Y '.devices.eth0.parent=\"{ovs_br}\"' {profile}")
+    if len(out1) > 0 or len(out2) > 0:
+        print(out1)
+        print(out2)
         return 0
     else:
-        return f"{profile} for host {host_id} vlan{vlan_id} successfully created ✅"
+        print(f"{profile} for host {host_id} vlan{vlan_id} successfully created ✅")
+        return profile
 
 
-def list_conts(vm: str):
+def list_conts_in_vm(vm: str):
     """
     return list of lxc containers in a host and their IP addresses.
     """
@@ -84,11 +84,24 @@ def list_conts(vm: str):
     return out
 
 
+def list_conts():
+    """
+    return list of lxc containers in a host and their IP addresses.
+    """
+    out = cmd("sudo lxc list")
+    return out
+
+
 # ===== execution functions ===== #
 ####### functions that execute and create data objects #######
 
 
-def create_conts_for_br(vm: str, br: str, cont_ids: list, vlan: int):
+def create_conts_for_br(
+    br: str,
+    cont_ids: list,
+    vlan: int,
+    vm: str = "",
+):
     """
     create LXD containers for an ovs bridge.
     naming scheme: cont-<cont_id>
@@ -97,6 +110,12 @@ def create_conts_for_br(vm: str, br: str, cont_ids: list, vlan: int):
     for id in cont_ids:
         prfl_name = edit_yaml(host_id=id, vlan_id=vlan, ovs_br=br)
         cont_out = create_container(name=f"cont-{id}", profile=prfl_name)
-        check = list_conts(vm=vm)
-        print(check)
-        save_logs([cont_out])
+
+    check = ""
+    if vm != "":
+        check = list_conts_in_vm(vm=vm)
+    else:
+        check = list_conts()
+
+    print(check)
+    save_logs([cont_out])
