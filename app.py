@@ -6,6 +6,7 @@ from measurements import *
 import argparse
 import re
 import yaml
+from pathlib import Path
 
 HOSTS_DATA = "sys_data/hosts.json"
 BRIDGES_DATA = "sys_data/bridges.json"
@@ -14,6 +15,8 @@ QOS_DATA = "sys_data/qos.json"
 VXLAN_DATA = "sys_data/vxlans.json"
 
 MEASUREMENTS = "measurements_data"
+
+FL_REPO = ""
 
 
 def args_func():
@@ -35,6 +38,10 @@ def args_func():
         choices=["bridges", "containers", "vxlans", "qos", "queues"],
         help="Build the network.",
     )
+    parser.add_argument(
+        "--deploy", action="store_true", help="Deploy ML app in all containers"
+    )
+
     args = parser.parse_args()
     return args
 
@@ -249,6 +256,44 @@ def run_test():
     )
 
 
+def get_container_names() -> list[str]:
+    """
+    return a list of container names in the host
+
+    :return: container names
+    :rtype: list[str]
+    """
+    data = read_json_file(CONTAINERS_DATA)
+    containers = [item.get("container") for item in data]
+    return containers
+
+
+def clone_to_container(name: str):
+    """
+    download a repo into a container
+
+    :param name: container name
+    :type name: str
+    """
+    input = f"sudo lxc exec {name} -- git clone {FL_REPO} ."
+    output = cmd(input)
+    return output
+
+def install_pip(name:str):
+    input = f"sudo lxc exec {name} -- python -m ensurepip --upgrade"
+    output = cmd(input)
+    return output
+
+def install_requirements(name:str):
+    input = f"sudo lxc exec {name} -- pip install -r requirements.txt"
+    output = cmd(input)
+    return output
+
+
+def init_cont_app(name: str):
+    out = cmd(f"sudo lxc exec {name} -- bash install_python.sh")
+
+
 def main():
     args = args_func()
 
@@ -301,6 +346,12 @@ def main():
                 q_rates = q_rates.split(",")
                 qos = input("\nProvide QoS ID: ").strip()
                 create_queues(q_rates, qos)
+    if args.deploy:
+        conts = get_container_names()
+        for cont in conts:
+            clone_to_container(cont)
+            install_pip(cont)
+            install_requirements(cont)
 
 
 if __name__ == "__main__":

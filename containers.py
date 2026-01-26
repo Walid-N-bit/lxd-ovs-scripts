@@ -19,12 +19,14 @@ def create_container(
     creates one LXD container using input params.
     profile must contain the final settings values for the container.
     """
-    input = f"sudo lxc init {server}:{image} {name}"
+    # input = f"sudo lxc init {server}:{image} {name}"
+    input = f"sudo lxc launch {server}:{image} {name}"
     if profile != "":
-        input = f"sudo lxc init {server}:{image} {name} < {profile}"
+        # input = f"sudo lxc init {server}:{image} {name} < {profile}"
+        input = f"sudo lxc launch {server}:{image} {name} < {profile}"
     print(f"Creating container {name}... ")
     output = cmd(input)
-    print(f"Finished ✅")
+    print(f"Finished")
     return output
 
 
@@ -88,8 +90,10 @@ def list_conts():
     """
     return list of lxc containers in a host and their IP addresses.
     """
-    out = cmd("sudo lxc list")
-    return out
+    headers = ["name", "status", "ipv4", "ipv6", "type", "snapshot"]
+    raw_output = cmd("sudo lxc list -f csv")
+
+    print(raw_output)
 
 
 # ===== execution functions ===== #

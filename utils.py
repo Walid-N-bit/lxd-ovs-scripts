@@ -16,10 +16,6 @@ TIME = datetime.now().strftime("%d-%m-%Y_%Hh-%Mm")
 DFLT_LOG_PATH = f"logs/{TIME}.txt"
 
 
-# def data_file_name(prefix: str):
-#     return f"{prefix}_{TIME}"
-
-
 def file_exists(path: str):
     """
     create path directory if it doesn't exist.
@@ -62,7 +58,7 @@ def load_csv_data(path: str):
         return "Specified path does not exist"
 
 
-def cmd(input: str) -> str:
+def cmd(input: str | list) -> str:
     """
     take input and run as a command. return output.
     """
@@ -71,6 +67,13 @@ def cmd(input: str) -> str:
     )
     out, _ = proc.communicate()
     return out
+
+
+def cmd2(args: str | list):
+    """
+    experimental cmd function
+    """
+    return subprocess.run(args=args, capture_output=True, text=True, check=False).stdout
 
 
 async def async_cmd(input: str) -> str:
@@ -179,7 +182,7 @@ def save_json_file(data: json, path: str):
     # f_exists = file_exists(path)
     directory = os.path.dirname(path)
     if directory:
-        os.makedirs(directory, exist_ok=True)        
+        os.makedirs(directory, exist_ok=True)
     with open(path, "w") as f:
         json.dump(data, f, indent=3)
 
@@ -320,7 +323,7 @@ def get_host_id(mode: Literal["local", "vm"], vm: str = ""):
 def id_from_ipv4(ip: str):
     """
     isolate host ID from an IPv4 address
-    
+
     :param ip: IPv4 address
     :type ip: str
     """
