@@ -1,0 +1,19 @@
+#!/usr/bin/expect -f
+# worker_proc.exp
+
+set timeout 20
+log_user 0
+
+set pw $env(PW)
+set cmd [lindex $argv 0]
+
+# puts "the command: $cmd"
+
+eval spawn $cmd
+
+expect {
+        -r "password" {send "$pw\r" }
+        timeout { puts "Timed out"; exit 1 }
+}
+
+interact

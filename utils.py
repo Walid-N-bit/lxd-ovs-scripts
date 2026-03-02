@@ -10,6 +10,7 @@ from typing import Callable, Literal
 from datetime import datetime
 import re
 import json
+from getpass import getpass
 
 
 TIME = datetime.now().strftime("%d-%m-%Y_%Hh-%Mm")
@@ -58,28 +59,33 @@ def load_csv_data(path: str):
         return "Specified path does not exist"
 
 
-def cmd(input: str | list) -> str:
+def cmd(input: str | list, passwd: bool = False) -> str:
     """
     take input and run as a command. return output.
     """
     proc = subprocess.Popen(
-        input, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, text=True
+        args=input,
+        stdout=subprocess.PIPE,
+        stdin=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        # shell=True,
+        text=True,
     )
-    out, _ = proc.communicate()
+
+    out = ""
+    if passwd:
+        pw = getpass()
+        out, _ = proc.communicate(input=pw)
+    else:
+        out, _ = proc.communicate()
     return out
-
-
-def cmd2(args: str | list):
-    """
-    experimental cmd function
-    """
-    return subprocess.run(args=args, capture_output=True, text=True, check=False).stdout
 
 
 async def async_cmd(input: str) -> str:
     """
     take input and run as a command. return output.
     """
+
     proc = subprocess.Popen(
         input, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, text=True
     )

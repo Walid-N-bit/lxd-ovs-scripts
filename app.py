@@ -16,7 +16,7 @@ VXLAN_DATA = "sys_data/vxlans.json"
 
 MEASUREMENTS = "measurements_data"
 
-FL_REPO = ""
+FL_REPO = "https://github.com/Walid-N-bit/fl_app.git"
 
 
 def args_func():
@@ -41,7 +41,9 @@ def args_func():
     parser.add_argument(
         "--deploy", action="store_true", help="Deploy ML app in all containers"
     )
-
+    parser.add_argument(
+        "--train", action="store_true", help="start model training"
+    )
     args = parser.parse_args()
     return args
 
@@ -288,10 +290,6 @@ def install_requirements(name:str):
     input = f"sudo lxc exec {name} -- pip install -r requirements.txt"
     output = cmd(input)
     return output
-
-
-def init_cont_app(name: str):
-    out = cmd(f"sudo lxc exec {name} -- bash install_python.sh")
 
 
 def main():
