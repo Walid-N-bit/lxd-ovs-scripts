@@ -43,8 +43,7 @@ def create_ovs_br_cmd(br: str, controller: str = CONTROLLER):
     """
     creates new ovs bridge with a given controller
     """
-    input = f"{VSCTL} add-br {br} -- set-controller {br} {controller} \
-    -- set bridge {br} protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13"  # protocols may be changed here if needed
+    input = f"{VSCTL} add-br {br} -- set-controller {br} {controller} -- set bridge {br} protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13"  # protocols may be changed here if needed
     return input
 
 
@@ -59,7 +58,6 @@ def create_brs_for_vm(vm_name: str, br_nbr: int, controller: str = ""):
         host_id: unique to every host in the network. the right-most number in IPv4
         bridge_id: 0, 1, 2, ...
     """
-    data = {}
     input = ""
     brs = []  # bridges to be created in the vm
     host_id = get_host_id(mode="vm", vm=vm_name)
@@ -107,8 +105,6 @@ def create_brs_in_host(hostname: str, br_nbr: int, controller: str = ""):
             input = create_ovs_br_cmd(br=br, controller=controller)
         else:
             input = create_ovs_br_cmd(br=br)
-        
-        print(f"\n{input}\n")
 
         br_out = cmd(input)
         # save_logs([disp_msg, br_out])
