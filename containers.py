@@ -53,7 +53,7 @@ def edit_yaml(
         print(
             f"yq is not installed. It will now be installed in order to edit {profile}.\n"
         )
-        output = cmd("sudo apt install yq", shell=True)
+        output = cmd("sudo apt install -y yq")
         print(output)
 
     # get user.network-config from profile, edit it for the requested host and vlan
