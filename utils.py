@@ -63,7 +63,7 @@ def cmd(input: str | list, passwd: bool = False, shell: bool = False) -> str:
     """
     take input and run as a command. return output.
     """
-    if type(input) == str:
+    if type(input) == str and not shell:
         input = input.split(" ")
 
     proc = subprocess.Popen(

@@ -66,10 +66,10 @@ def edit_yaml(
     )
     print(f"Creating profile for 10.0.{vlan_id}.{host_id}...", end=" ")
     out1 = cmd(
-        f"sudo yq -i -Y '.config.\"user.network-config\"={new_config}' {profile}"
+        f"sudo yq -i -Y '.config.\"user.network-config\"={new_config}' {profile}",shell=True
     )
     # change the value for the bridge
-    out2 = cmd(f"sudo yq -i -Y '.devices.eth0.parent=\"{ovs_br}\"' {profile}")
+    out2 = cmd(f"sudo yq -i -Y '.devices.eth0.parent=\"{ovs_br}\"' {profile}", shell=True)
     if len(out1) > 0 or len(out2) > 0:
         print(out1)
         print(out2)
