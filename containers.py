@@ -65,19 +65,19 @@ def edit_yaml(
         .replace("vlan_host", f"{host_id}")
     )
     print(f"Creating profile for 10.0.{vlan_id}.{host_id}...", end=" ")
-    inp1 = f"sudo yq -i -Y '.config.\"user.network-config\"={new_config}' {profile}"
-    # inp1 = [
-    #     "sudo",
-    #     "yq",
-    #     "-i",
-    #     "-Y",
-    #     f'.config["user.network-config"]={new_config}',
-    #     f"{profile}",
-    # ]
+    # inp1 = f"sudo yq -i -Y '.config.\"user.network-config\"={new_config}' {profile}"
+    inp1 = [
+        "sudo",
+        "yq",
+        "-i",
+        "-Y",
+        f'.config.\"user.network-config\"={new_config}',
+        f"{profile}",
+    ]
     out1 = cmd(inp1)
     # change the value for the bridge
-    inp2 = f"sudo yq -i -Y '.devices.eth0.parent=\"{ovs_br}\"' {profile}"
-    # inp2 = ["sudo", "yq", "-i", "-Y", f'.devices.eth0.parent="{ovs_br}"', f"{profile}"]
+    # inp2 = f"sudo yq -i -Y '.devices.eth0.parent=\"{ovs_br}\"' {profile}"
+    inp2 = ["sudo", "yq", "-i", "-Y", f'.devices.eth0.parent=\"{ovs_br}\"', f"{profile}"]
     out2 = cmd(inp2)
     if len(out1) > 0 or len(out2) > 0:
         print(out1)
