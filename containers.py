@@ -75,7 +75,7 @@ def edit_yaml(
         print(out2)
         return 0
     else:
-        print(f"{profile} for host {host_id} vlan{vlan_id} successfully created ✅")
+        print(f"\n{profile} for host {host_id} vlan{vlan_id} successfully created")
         return profile
 
 
