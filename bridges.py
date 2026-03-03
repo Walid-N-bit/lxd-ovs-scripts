@@ -43,6 +43,7 @@ def create_ovs_br_cmd(br: str, controller: str = CONTROLLER):
     """
     creates new ovs bridge with a given controller
     """
+    print("create_ovs_br_cmd called")
     input = f"{VSCTL} add-br {br} -- set-controller {br} {controller} \
     -- set bridge {br} protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13"  # protocols may be changed here if needed
     return input
@@ -55,7 +56,7 @@ def create_ovs_br_cmd(br: str, controller: str = CONTROLLER):
 def create_brs_for_vm(vm_name: str, br_nbr: int, controller: str = ""):
     """
     create bridges for a VM.
-    naming schema: br-<host_id>-<bridge_id>
+    naming schema: br_<host_id>-<bridge_id>
         host_id: unique to every host in the network. the right-most number in IPv4
         bridge_id: 0, 1, 2, ...
     """
@@ -65,11 +66,11 @@ def create_brs_for_vm(vm_name: str, br_nbr: int, controller: str = ""):
     host_id = get_host_id(mode="vm", vm=vm_name)
 
     for i in range(br_nbr):
-        brs.append(f"br-{host_id}-{i}")
+        brs.append(f"br_{host_id}-{i}")
 
     for br in brs:
         # send command to create bridge in VM from host machine
-        disp_msg = f"Creating OVS Bridge {br} in {vm_name} ... "
+        disp_msg = f"\nCreating OVS Bridge {br} in {vm_name} ... \n"
         print(disp_msg)
         if controller != "":
             input = create_ovs_br_cmd(br=br, controller=controller)
@@ -88,7 +89,7 @@ def create_brs_for_vm(vm_name: str, br_nbr: int, controller: str = ""):
 def create_brs_in_host(hostname: str, br_nbr: int, controller: str = ""):
     """
     create OVS bridges in a host machine.
-    naming schema: br-<host_id>-<bridge_id>
+    naming schema: br_<host_id>-<bridge_id>
         host_id: unique to every host in the network. the right-most number in IPv4
         bridge_id: 0, 1, 2, ...
     """
@@ -98,11 +99,11 @@ def create_brs_in_host(hostname: str, br_nbr: int, controller: str = ""):
     host_id = get_host_id(mode="local")
 
     for i in range(br_nbr):
-        brs.append(f"br-{host_id}-{i}")
+        brs.append(f"br_{host_id}-{i}")
 
     for br in brs:
         # send command to create bridge in VM from host machine
-        disp_msg = f"Creating OVS Bridge {br} in {hostname} ... "
+        disp_msg = f"\nCreating OVS Bridge {br} in {hostname} ... \n"
         print(disp_msg)
         if controller != "":
             input = create_ovs_br_cmd(br=br, controller=controller)
