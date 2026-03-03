@@ -24,9 +24,9 @@ def create_container(
     if profile != "":
         # input = f"sudo lxc init {server}:{image} {name} < {profile}"
         input = f"sudo lxc launch {server}:{image} {name} < {profile}"
-    print(f"Creating container {name}... ")
+    print(f"\nCreating container {name}... ")
     output = cmd(input)
-    print(f"Finished")
+    print(f"\nFinished")
     return output
 
 
@@ -53,7 +53,7 @@ def edit_yaml(
         print(
             f"yq is not installed. It will now be installed in order to edit {profile}.\n"
         )
-        cmd("sudo apt install yq")
+        cmd("sudo apt install yq", shell=True)
 
     # get user.network-config from profile, edit it for the requested host and vlan
     config = cmd(f"sudo yq '.config.\"user.network-config\"' {profile}")

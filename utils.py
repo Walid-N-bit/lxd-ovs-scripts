@@ -59,19 +59,19 @@ def load_csv_data(path: str):
         return "Specified path does not exist"
 
 
-def cmd(input: str | list, passwd: bool = False) -> str:
+def cmd(input: str | list, passwd: bool = False, shell: bool = False) -> str:
     """
     take input and run as a command. return output.
     """
     if type(input) == str:
         input = input.split(" ")
-    
+
     proc = subprocess.Popen(
         args=input,
         stdout=subprocess.PIPE,
         stdin=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        # shell=True,
+        shell=shell,
         text=True,
     )
 
