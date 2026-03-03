@@ -63,6 +63,9 @@ def cmd(input: str | list, passwd: bool = False) -> str:
     """
     take input and run as a command. return output.
     """
+    if type(input) == str:
+        input = input.split(" ")
+    
     proc = subprocess.Popen(
         args=input,
         stdout=subprocess.PIPE,
@@ -319,6 +322,7 @@ def get_host_id(mode: Literal["local", "vm"], vm: str = ""):
         out = lxc_cmd(vm, "hostname -I")
 
     out_ips = out.split(" ")
+    print(out_ips)
     for ip in out_ips:
         host_id = id_from_ipv4(ip=ip)
         if host_id != "":
