@@ -25,7 +25,7 @@ def create_container(
         # input = f"sudo lxc init {server}:{image} {name} < {profile}"
         input = f"sudo lxc launch {server}:{image} {name} < {profile}"
     print(f"\nCreating container {name}... ")
-    output = cmd(input)
+    output = cmd(input, shell=True)
     print(f"\nFinished")
     return output
 

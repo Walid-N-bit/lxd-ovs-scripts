@@ -65,7 +65,6 @@ def cmd(input: str | list, passwd: bool = False, shell: bool = False) -> str:
     """
     if type(input) == str and not shell:
         input = input.split(" ")
-
     proc = subprocess.Popen(
         args=input,
         stdout=subprocess.PIPE,
