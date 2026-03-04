@@ -69,7 +69,7 @@ def edit_yaml(
     try:
         # with open(profile, "w") as f:
         #     yaml.dump(profile_data, f)
-        yaml.dump(profile_data, profile)
+        yaml.dump(profile_data, Path(profile))
         print("Profile created.")
     except Exception as e:
         raise e
