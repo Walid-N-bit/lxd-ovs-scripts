@@ -40,52 +40,89 @@ def edit_yaml(
     vlan_id: int,
     ovs_br: str,
     path: str = DFLT_PROFILE,
-):
+) -> dict:
     """
     modify contents of a yaml file.
     create a temporary .yaml profile using the passed params.
+    return the name of the profile.
     """
+    import yaml
+
     profile = create_temp_profile(path)
-
-    # check if yq is installed, install if it isn't
-    is_yq = is_installed("yq")
-    if not is_yq:
-        print(
-            f"yq is not installed. It will now be installed in order to edit {profile}.\n"
-        )
-        output = cmd("sudo apt install -y yq")
-        print(output)
-
-    # get user.network-config from profile, edit it for the requested host and vlan
-    config = cmd(f"sudo yq '.config.\"user.network-config\"' {profile}")
+    with open(profile, 'r') as f:
+        profile_data = yaml.safe_load(f)
+    
+    config = profile_data["config"]["user.network-config"]
     new_config = (
         config.replace("eth1_host", f"{host_id}")
         .replace("vlan_iface", f"vlan{vlan_id}")
         .replace("vlan_id", f"{vlan_id}")
         .replace("vlan_host", f"{host_id}")
     )
+    profile_data["config"]["user.network-config"] = new_config
+    profile_data["devices"]["eth0"]["parent"] = ovs_br
     print(f"Creating profile for 10.0.{vlan_id}.{host_id}...", end=" ")
-    # inp1 = f"sudo yq -i -Y '.config.\"user.network-config\"={new_config}' {profile}"
-    inp1 = [
-        "sudo",
-        "yq",
-        "-i",
-        "-Y",
-        f'.config.\"user.network-config\"={new_config}',
-        f"{profile}",
-    ]
-    out1 = cmd(inp1)
-    # change the value for the bridge
-    # inp2 = f"sudo yq -i -Y '.devices.eth0.parent=\"{ovs_br}\"' {profile}"
-    inp2 = ["sudo", "yq", "-i", "-Y", f'.devices.eth0.parent=\"{ovs_br}\"', f"{profile}"]
-    out2 = cmd(inp2)
-    if len(out1) > 0 or len(out2) > 0:
-        print(out1)
-        print(out2)
-        return 0
-    else:
-        print(f"\n{profile} for host {host_id} vlan{vlan_id} successfully created")
-        return profile
+    try:
+        with open(profile, "w") as f:
+            yaml.dump(profile_data, f)
+        print("Profile created.")
+    except Exception as e:
+        raise e
+
+    return profile
+
+
+# def edit_yaml(
+#     host_id: int,
+#     vlan_id: int,
+#     ovs_br: str,
+#     path: str = DFLT_PROFILE,
+# ):
+#     """
+#     modify contents of a yaml file.
+#     create a temporary .yaml profile using the passed params.
+#     """
+#     profile = create_temp_profile(path)
+
+#     # check if yq is installed, install if it isn't
+#     is_yq = is_installed("yq")
+#     if not is_yq:
+#         print(
+#             f"yq is not installed. It will now be installed in order to edit {profile}.\n"
+#         )
+#         output = cmd("sudo apt install -y yq")
+#         print(output)
+
+#     # get user.network-config from profile, edit it for the requested host and vlan
+#     config = cmd(f"sudo yq '.config.\"user.network-config\"' {profile}")
+#     new_config = (
+#         config.replace("eth1_host", f"{host_id}")
+#         .replace("vlan_iface", f"vlan{vlan_id}")
+#         .replace("vlan_id", f"{vlan_id}")
+#         .replace("vlan_host", f"{host_id}")
+#     )
+#     print(f"Creating profile for 10.0.{vlan_id}.{host_id}...", end=" ")
+#     # inp1 = f"sudo yq -i -Y '.config.\"user.network-config\"={new_config}' {profile}"
+#     inp1 = [
+#         "sudo",
+#         "yq",
+#         "-i",
+#         "-Y",
+#         f'.config.\"user.network-config\"={new_config}',
+#         f"{profile}",
+#     ]
+#     out1 = cmd(inp1)
+#     # change the value for the bridge
+#     # inp2 = f"sudo yq -i -Y '.devices.eth0.parent=\"{ovs_br}\"' {profile}"
+#     inp2 = ["sudo", "yq", "-i", "-Y", f'.devices.eth0.parent=\"{ovs_br}\"', f"{profile}"]
+#     out2 = cmd(inp2)
+#     if len(out1) > 0 or len(out2) > 0:
+#         print(out1)
+#         print(out2)
+#         return 0
+#     else:
+#         print(f"\n{profile} for host {host_id} vlan{vlan_id} successfully created")
+#         return profile
 
 
 def list_conts_in_vm(vm: str):
