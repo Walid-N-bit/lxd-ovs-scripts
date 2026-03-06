@@ -341,3 +341,17 @@ def id_from_ipv4(ip: str):
     if match:
         host_id = match.group(1)
     return host_id
+
+
+def get_iface_ipv4(iface: str) -> str:
+    
+    import socket
+    import fcntl
+    import struct
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return socket.inet_ntoa(
+        fcntl.ioctl(
+            s.fileno(), 0x8915, struct.pack("256s", iface[:15].encode())  # SIOCGIFADDR
+        )[20:24]
+    )
