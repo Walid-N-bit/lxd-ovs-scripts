@@ -39,7 +39,7 @@ def args_func():
         help="Build the network.",
     )
     parser.add_argument(
-        "--deploy", action="store_true", help="Deploy ML app in all containers"
+        "--deploy", action="store_true", help="Deploy FL app in all containers"
     )
     parser.add_argument(
         "--train", action="store_true", help="start model training"
@@ -278,17 +278,17 @@ def clone_to_container(name: str):
     :type name: str
     """
     input = f"sudo lxc exec {name} -- git clone {FL_REPO} ."
-    output = cmd(input)
+    output = cmd(input, shell=True)
     return output
 
 def install_pip(name:str):
     input = f"sudo lxc exec {name} -- python -m ensurepip --upgrade"
-    output = cmd(input)
+    output = cmd(input, shell=True)
     return output
 
 def install_requirements(name:str):
     input = f"sudo lxc exec {name} -- pip install -r requirements.txt"
-    output = cmd(input)
+    output = cmd(input, shell=True)
     return output
 
 
