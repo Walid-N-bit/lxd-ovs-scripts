@@ -41,9 +41,7 @@ def args_func():
     parser.add_argument(
         "--deploy", action="store_true", help="Deploy FL app in all containers"
     )
-    parser.add_argument(
-        "--train", action="store_true", help="start model training"
-    )
+    parser.add_argument("--train", action="store_true", help="start model training")
     args = parser.parse_args()
     return args
 
@@ -265,8 +263,11 @@ def get_container_names() -> list[str]:
     :return: container names
     :rtype: list[str]
     """
-    data = read_json_file(CONTAINERS_DATA)
-    containers = [item.get("container") for item in data]
+    # data = read_json_file(CONTAINERS_DATA)
+    # containers = [item.get("container") for item in data]
+    input = "lxc list -c n -f csv"
+    output = cmd(input)
+    containers = output.splitlines()
     return containers
 
 
@@ -277,18 +278,35 @@ def clone_to_container(name: str):
     :param name: container name
     :type name: str
     """
-    input = f"sudo lxc exec {name} -- git clone {FL_REPO} ."
+    input = f"sudo lxc exec {name} -- git clone {FL_REPO}"
     output = cmd(input, shell=True)
     return output
 
-def install_pip(name:str):
-    input = f"sudo lxc exec {name} -- python -m ensurepip --upgrade"
-    output = cmd(input, shell=True)
-    return output
 
-def install_requirements(name:str):
-    input = f"sudo lxc exec {name} -- pip install -r requirements.txt"
-    output = cmd(input, shell=True)
+# def install_pip(name: str):
+#     input = f"sudo lxc exec {name} -- bash -c 'sudo apt update && sudo apt install -y git python3-pip'"
+#     output = cmd(input, shell=True)
+#     return output
+
+
+# def install_requirements(name: str):
+#     input = f"sudo lxc exec {name} -- python3 -m pip install --break-system-packages -r fl_app/requirements.txt"
+#     output = cmd(input, shell=True)
+#     return output
+
+
+def install_dependencies(name: str):
+    inputs = f"""sudo lxc exec {name} -- bash -c '
+    sudo apt update &&
+    sudo apt install -y git python3-pip &&
+    sudo apt install python3-venv &&
+    cd fl_app &&
+    python3 -m venv venv &&
+    source venv/bin/activate &&
+    pip install -r requirements.txt &&
+    '
+    """
+    output = cmd(inputs, shell=True)
     return output
 
 
@@ -344,13 +362,14 @@ def main():
                 q_rates = q_rates.split(",")
                 qos = input("\nProvide QoS ID: ").strip()
                 create_queues(q_rates, qos)
+
     if args.deploy:
         conts = get_container_names()
         for cont in conts:
-            clone_to_container(cont)
-            install_pip(cont)
-            install_requirements(cont)
-
+            out1 = clone_to_container(cont)
+            print(out1)
+            out2 = install_dependencies(cont)
+            print(out2)
 
 if __name__ == "__main__":
     main()

@@ -95,7 +95,7 @@ def get_vxlans() -> list[str]:
     :return: list of vxlan interfaces
     :rtype: list[str]
     """
-    input = " sudo ovs-vsctl --format=csv --columns=name --no-headings find interface type=vxlan"
+    input = "sudo ovs-vsctl --format=csv --columns=name --no-headings find interface type=vxlan"
     output = cmd(input).splitlines()
     return output
 
@@ -110,7 +110,7 @@ def get_vxlan_options(vxlan: str) -> dict[dict]:
     :return: options object
     :rtype: dict
     """
-    input = f" sudo ovs-vsctl --format=json --pretty --columns=options find interface name={vxlan}"
+    input = f"sudo ovs-vsctl --format=json --pretty --columns=options find interface name={vxlan}"
     # the output here in json format
     output = cmd(input)
     output = json.loads(output)
