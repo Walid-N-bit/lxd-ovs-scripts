@@ -151,10 +151,11 @@ def run_iperf_test(client: str, server: str, port: str | int = "") -> list[tuple
     server_id = get_host_id(mode="vm", vm=server)
     server_ip = f"10.0.200.{server_id}"
 
-    server_input = f"sudo lxc exec {server} -- {iperf(mode="server", port=port)}"
-    client_input = (
-        f"sudo lxc exec {client} -- {iperf(mode="client", ip=server_ip, port=port)}"
-    )
+    server_cmd = iperf(mode="server", port=port)
+    server_input = f"sudo lxc exec {server} -- {server_cmd}"
+
+    client_cmd = iperf(mode="client", ip=server_ip, port=port)
+    client_input = f"sudo lxc exec {client} -- {client_cmd}"
 
     timeout = 12
 
