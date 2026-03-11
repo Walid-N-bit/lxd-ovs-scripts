@@ -303,7 +303,7 @@ def install_dependencies(name: str):
     cd fl_app &&
     python3 -m venv venv &&
     source venv/bin/activate &&
-    pip install -r requirements.txt &&
+    pip install -r requirements.txt
     '
     """
     output = cmd(inputs, shell=True)
