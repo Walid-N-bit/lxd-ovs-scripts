@@ -303,9 +303,9 @@ def install_dependencies(name: str):
     && sudo apt install python3-venv -y
     && cd fl_app
     && python3 -m venv venv
-    && source venv/bin/activate
     '
     """
+    # && source venv/bin/activate
     # && pip install -r requirements.txt
     output = cmd(inputs, shell=True)
     return output
