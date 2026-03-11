@@ -297,16 +297,16 @@ def clone_to_container(name: str):
 
 def install_dependencies(name: str):
     inputs = f"""sudo lxc exec {name} -- bash -c '
-    sudo apt update -y &&
-    sudo apt upgrade -y &&
-    sudo apt install -y git python3-pip &&
-    sudo apt install python3-venv -y &&
-    cd fl_app &&
-    python3 -m venv venv &&
-    source venv/bin/activate &&
-    pip install -r requirements.txt
+    sudo apt update -y
+    && sudo apt upgrade -y
+    && sudo apt install -y git python3-pip
+    && sudo apt install python3-venv -y
+    && cd fl_app
+    && python3 -m venv venv
+    && source venv/bin/activate
     '
     """
+    # && pip install -r requirements.txt
     output = cmd(inputs, shell=True)
     return output
 
