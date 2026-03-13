@@ -32,6 +32,8 @@ devices:
     nictype: bridged
     parent: lxdbr0
     type: nic
+  gpu:
+    type: gpu
 used_by:
 
 project: default
