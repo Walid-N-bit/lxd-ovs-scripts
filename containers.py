@@ -73,7 +73,7 @@ def edit_yaml(
     try:
         # with open(Path(profile), "w") as f:
         #     yaml.dump(profile_data, f)
-        cmd("chmod u+w .", shell=True)
+        cmd("chmod u+w ~/lxd-ovs-scripts", shell=True)
         yaml.dump(profile_data, Path(profile))
         print("Profile created.")
     except Exception as e:
