@@ -71,7 +71,7 @@ def edit_yaml(
     profile_data["devices"]["eth0"]["parent"] = ovs_br
     print(f"Creating profile for 10.0.{vlan_id}.{host_id}...", end=" ")
     try:
-        with open(profile, "w") as f:
+        with open(Path(profile), "w") as f:
             yaml.dump(profile_data, f)
         # yaml.dump(profile_data, Path(profile))
         print("Profile created.")
