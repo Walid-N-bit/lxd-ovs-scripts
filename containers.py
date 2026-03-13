@@ -43,8 +43,8 @@ def edit_yaml(
     path: str = DFLT_PROFILE,
 ) -> dict:
     """
-    modify contents of a yaml file.
     create a temporary .yaml profile using the passed params.
+    modify contents of the .yaml file.
     return the name of the profile.
     """
     from ruamel.yaml import YAML
@@ -73,8 +73,8 @@ def edit_yaml(
     try:
         # with open(Path(profile), "w") as f:
         #     yaml.dump(profile_data, f)
-        cmd("chmod u+w ~/lxd-ovs-scripts", shell=True)
-        yaml.dump(profile_data, Path(profile))
+        abs_path = Path(profile).absolute()
+        yaml.dump(profile_data, abs_path)
         print("Profile created.")
     except Exception as e:
         raise e
