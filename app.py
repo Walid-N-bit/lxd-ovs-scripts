@@ -267,7 +267,7 @@ def get_container_names() -> list[str]:
     # containers = [item.get("container") for item in data]
     input = "lxc list -c n -f csv"
     output = cmd(input)
-    containers = output.splitlines()
+    containers = [c for c in output.splitlines() if ("cont" in c)]
     return containers
 
 
@@ -366,11 +366,19 @@ def main():
 
     if args.deploy:
         conts = get_container_names()
-        for cont in conts:
+        print(f"\n{conts}")
+        print(f"\nTarget repo: {FL_REPO}")
+        target_conts = (
+            input("\nSelect containers to clone the repo(e.g.: cont-1,cont-2,...): ")
+            .strip()
+            .split(",")
+        )
+        for cont in target_conts:
             out1 = clone_to_container(cont)
             print(out1)
             out2 = install_dependencies(cont)
             print(out2)
+
 
 if __name__ == "__main__":
     main()
