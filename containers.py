@@ -20,11 +20,11 @@ def create_container(
     creates one LXD container using input params.
     profile must contain the final settings values for the container.
     """
-    input = f"sudo lxc init {server}:{image} {name}"
-    # input = f"sudo lxc launch {server}:{image} {name}"
+    # input = f"sudo lxc init {server}:{image} {name}"
+    input = f"sudo lxc launch {server}:{image} {name}"
     if profile != "":
-        input = f"sudo lxc init {server}:{image} {name} < {profile}"
-        # input = f"sudo lxc launch {server}:{image} {name} < {profile}"
+        # input = f"sudo lxc init {server}:{image} {name} < {profile}"
+        input = f"sudo lxc launch {server}:{image} {name} < {profile}"
     print(f"\nCreating container {name}... ")
     output = cmd(input, shell=True)
     print(f"\nFinished")
