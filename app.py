@@ -296,21 +296,25 @@ def clone_to_container(name: str):
 #     return output
 
 
-def install_dependencies(name: str):
-    inputs = f"""sudo lxc exec {name} -- bash -c '
-    sudo apt update -y && 
-    sudo apt upgrade -y && 
-    sudo apt install nvidia-driver-570 && 
-    sudo apt install -y git python3-pip && 
-    sudo apt install python3-venv -y && 
-    cd fl_app && 
-    python3 -m venv venv && 
-    sudo reboot
-    '
+def install_dependencies(name: str, input: tuple):
     """
-    # && source venv/bin/activate
-    # && pip install -r requirements.txt
-    output = cmd(inputs, shell=True)
+    Install necessary drivers and Python dependencies
+    """
+    # inputs = f"""sudo lxc exec {name} -- bash -c '
+    # sudo apt update -y &&
+    # sudo apt upgrade -y &&
+    # sudo apt install nvidia-driver-570 &&
+    # sudo apt install -y git python3-pip &&
+    # sudo apt install python3-venv -y &&
+    # cd fl_app &&
+    # python3 -m venv venv &&
+    # sudo reboot
+    # '
+    # """
+    print(input[0])
+    command = f"sudo lxc exec {name} -- bash -c '{input[1]}'"
+
+    output = cmd(command, shell=True)
     return output
 
 
@@ -376,11 +380,26 @@ def main():
             .strip()
             .split(",")
         )
+        inputs = [
+            (
+                "\n### Update and upgrade ###",
+                "sudo apt update -y && sudo apt upgrade -y",
+            ),
+            ("\n### Nvidia driver install ###", "sudo apt install nvidia-driver-570"),
+            (
+                "\n### Pthon venv and pip install ###",
+                "sudo apt install -y git python3-pip && sudo apt install python3-venv -y",
+            ),
+            ("\n ### create venv ###", "cd fl_app && python3 -m venv venv"),
+        ]
         for cont in target_conts:
             out1 = clone_to_container(cont)
             print(out1)
-            out2 = install_dependencies(cont)
-            print(out2)
+            # out2 = install_dependencies(cont)
+            # print(out2)
+            for i in inputs:
+                out = install_dependencies(cont, i)
+                print(out)
 
 
 if __name__ == "__main__":
