@@ -386,7 +386,7 @@ def main():
             ("\n### create venv ###", "cd fl_app && python3 -m venv venv"),
             (
                 "\n### PyTorch and requirements ###",
-                "source fl_app/venv/bin/activate && pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu130 && pip install -r requirements.txt",
+                "source fl_app/venv/bin/activate && pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu130 && pip install -r fl_app/requirements.txt",
             ),
         ]
         for cont in target_conts:
