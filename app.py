@@ -385,9 +385,9 @@ def main():
                 "\n### Update and upgrade ###",
                 "sudo apt update -y && sudo apt upgrade -y",
             ),
-            ("\n### Nvidia driver install ###", "sudo apt install nvidia-driver-570"),
+            ("\n### Nvidia driver install ###", "sudo apt install nvidia-driver-570 -y"),
             (
-                "\n### Pthon venv and pip install ###",
+                "\n### Python venv and pip install ###",
                 "sudo apt install -y git python3-pip && sudo apt install python3-venv -y",
             ),
             ("\n ### create venv ###", "cd fl_app && python3 -m venv venv"),
