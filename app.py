@@ -388,6 +388,7 @@ def main():
                 "\n### PyTorch and requirements ###",
                 "source fl_app/venv/bin/activate && pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu130 && pip install -r fl_app/requirements.txt",
             ),
+            ("\n ### Rebooting... ###", "sudo reboot"),
         ]
         for cont in target_conts:
             print(f"\n##### {cont} ####\n")
@@ -396,6 +397,14 @@ def main():
             for i in inputs:
                 out = install_dependencies(cont, i)
                 print(out)
+
+    if args.train:
+        from fl_utils import start_fed_training
+
+        conts = get_container_names()
+        print(f"\nContainers: {','.join(conts)}")
+        server = input(f"\nServer container: ").strip()
+        start_fed_training(conts, server)
 
 
 if __name__ == "__main__":

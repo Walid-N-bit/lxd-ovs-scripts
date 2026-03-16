@@ -37,6 +37,7 @@ devices:
   root:
     path: /
     pool: default-LXDPool
+    size: 30GiB
     type: disk
 used_by:
 
