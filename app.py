@@ -373,7 +373,7 @@ def main():
 
     if args.deploy:
         conts = get_container_names()
-        print(f"\n{conts}")
+        print(f"\nContainers: {','.join(conts)}")
         print(f"\nTarget repo: {FL_REPO}")
         target_conts = (
             input("\nSelect containers to clone the repo(e.g.: cont-1,cont-2,...): ")
@@ -385,7 +385,10 @@ def main():
                 "\n### Update and upgrade ###",
                 "sudo apt update -y && sudo apt upgrade -y",
             ),
-            ("\n### Nvidia driver install ###", "sudo apt install nvidia-driver-570 -y"),
+            (
+                "\n### Nvidia driver install ###",
+                "sudo apt install nvidia-driver-570 -y",
+            ),
             (
                 "\n### Python venv and pip install ###",
                 "sudo apt install -y git python3-pip && sudo apt install python3-venv -y",
