@@ -25,9 +25,9 @@ def create_container(
     if profile != "":
         # input = f"sudo lxc init {server}:{image} {name} < {profile}"
         input = f"sudo lxc launch {server}:{image} {name} < {profile}"
-    print(f"\nCreating container {name}... ")
+    print(f"\nCreating container {name}... ", end="")
     output = cmd(input, shell=True)
-    print(f"\nFinished")
+    print("Finished")
     return output
 
 

@@ -34,6 +34,10 @@ devices:
     type: nic
   gpu:
     type: gpu
+  root:
+    path: /
+    pool: default-LXDPool
+    type: disk
 used_by:
 
 project: default
