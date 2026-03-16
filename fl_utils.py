@@ -11,7 +11,7 @@ def start_fed_training(containers: list, server_cont: str):
     create tmux panes and send commands to each to start the federated learning process
     """
     # create session
-    cmd("tmux")
+    cmd("tmux new")
     # start server
     id = get_host_id("vm", server_cont)
     server_ip = f"10.0.200.{id}"
