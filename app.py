@@ -300,17 +300,7 @@ def install_dependencies(name: str, input: tuple):
     """
     Install necessary drivers and Python dependencies
     """
-    # inputs = f"""sudo lxc exec {name} -- bash -c '
-    # sudo apt update -y &&
-    # sudo apt upgrade -y &&
-    # sudo apt install nvidia-driver-570 &&
-    # sudo apt install -y git python3-pip &&
-    # sudo apt install python3-venv -y &&
-    # cd fl_app &&
-    # python3 -m venv venv &&
-    # sudo reboot
-    # '
-    # """
+
     print(input[0])
     command = f"sudo lxc exec {name} -- bash -c '{input[1]}'"
 
@@ -393,13 +383,16 @@ def main():
                 "\n### Python venv and pip install ###",
                 "sudo apt install -y git python3-pip && sudo apt install python3-venv -y",
             ),
-            ("\n ### create venv ###", "cd fl_app && python3 -m venv venv"),
+            ("\n### create venv ###", "cd fl_app && python3 -m venv venv"),
+            (
+                "\n### PyTorch and requirements ###",
+                "source fl_app/venv/bin/activate && pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu130 && pip install -r requirements.txt",
+            ),
         ]
         for cont in target_conts:
+            print(f"\n##### {cont} ####\n")
             out1 = clone_to_container(cont)
             print(out1)
-            # out2 = install_dependencies(cont)
-            # print(out2)
             for i in inputs:
                 out = install_dependencies(cont, i)
                 print(out)
