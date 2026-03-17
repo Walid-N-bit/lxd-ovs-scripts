@@ -40,4 +40,6 @@ def start_fed_training(containers: list, server_cont: str):
 
     # start trining
     cmd(["tmux", "split-window", "-h"])
+    cmd(send_keys(f"lxc shell {server_cont}"))
+    cmd(send_keys("cd fl_app ; source venv/bin/activate"))
     cmd(send_keys("flwr run . local-deployment --stream"))
