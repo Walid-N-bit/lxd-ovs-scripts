@@ -10,12 +10,19 @@ def start_fed_training(containers: list, server_cont: str):
     """
     create tmux panes and send commands to each to start the federated learning process
     """
+
+    def send_keys(keys: str):
+        return ["tmux", "send-keys", keys, "C-m"]
+
     # create session
-    cmd("tmux new")
+    sess_out = cmd("tmux new -d")
+    print(sess_out)
     # start server
     id = get_host_id("vm", server_cont)
     server_ip = f"10.0.200.{id}"
-    cmd("tmux send-keys 'flower-superlink --insecure' C-m")
+    cmd(send_keys(f"lxc shell {server_cont}"))
+    cmd(send_keys("cd fl_app ; source venv/bin/activate"))
+    cmd(send_keys("flower-superlink --insecure"))
 
     # start clients
     clients = containers.copy()
@@ -29,7 +36,8 @@ def start_fed_training(containers: list, server_cont: str):
         ]
         cmd("tmux split-window -h")
         for c in commands:
-            cmd(f"tmux send-keys '{c}' C-m", shell=True)
+            cmd(send_keys(c))
 
     # start trining
-    cmd("tmux split-window -h 'flwr run . local-deployment --stream'", shell=True)
+    cmd(["tmux", "split-window", "-h"])
+    cmd(send_keys("flwr run . local-deployment --stream"))
