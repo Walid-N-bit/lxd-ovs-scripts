@@ -43,3 +43,11 @@ def start_fed_training(containers: list, server_cont: str):
     cmd(send_keys(f"lxc shell {server_cont}"))
     cmd(send_keys("cd fl_app ; source venv/bin/activate"))
     cmd(send_keys("flwr run . local-deployment --stream"))
+
+
+def update_nodes(containers:list):
+    for cont in containers:
+        out = cmd(f"lxc exec {cont} -- git -C fl_app pull")
+        print(out)
+    
+

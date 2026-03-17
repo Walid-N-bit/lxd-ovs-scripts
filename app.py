@@ -43,6 +43,9 @@ def args_func():
         "--deploy", action="store_true", help="Deploy FL app in all containers"
     )
     parser.add_argument("--train", action="store_true", help="start model training")
+    parser.add_argument(
+        "--update", action="store_true", help="perform 'git pull' in every container"
+    )
     args = parser.parse_args()
     return args
 
@@ -405,6 +408,12 @@ def main():
         print(f"\nContainers: {','.join(conts)}")
         server = input(f"\nServer container: ").strip()
         start_fed_training(conts, server)
+
+    if args.update:
+        from fl_utils import update_nodes
+
+        conts = get_container_names()
+        update_nodes(conts)
 
 
 if __name__ == "__main__":
