@@ -4,6 +4,12 @@ This module is designed to run this application: https://github.com/Walid-N-bit/
 """
 
 from utils import cmd, get_host_id
+import pandas as pd
+
+TRAIN_DATA = "compressed_images_wheat/train.csv"
+TEST_DATA = "compressed_images_wheat/test.csv"
+PARTITIONING = "compressed_images_wheat/data_partition.json"
+DATA_DIR = "fl_app/compressed_images_wheat/"
 
 
 def start_fed_training(containers: list, server_cont: str):
@@ -45,9 +51,89 @@ def start_fed_training(containers: list, server_cont: str):
     cmd(send_keys("flwr run . local-deployment --stream"))
 
 
-def update_nodes(containers:list):
+def update_nodes(containers: list):
     for cont in containers:
         out = cmd(f"lxc exec {cont} -- git -C fl_app pull")
         print(out)
-    
+
+
+def partition_data(containers: list, parts_nbr: int) -> dict:
+    """
+    Docstring for partition_data
+
+    :param containers: Description
+    :type containers: list
+    :return: Description
+    :rtype: dict
+    """
+    import random
+
+    def create_parts(nodes: list, classes: list) -> list[list]:
+        result = []
+        for _ in range(len(nodes)):
+            local_part = random.sample(classes, parts_nbr)
+            result.append(local_part)
+        return result
+
+    def included_classes(class_parts: list[list]) -> set:
+        all_classes = []
+        for part in class_parts:
+            all_classes.extend(part)
+        return set(all_classes)
+
+    global_train = pd.read_csv(TRAIN_DATA)
+    # global_test = pd.read_csv(TEST_DATA)
+    global_classes = sorted(global_train["class_name"].unique())
+
+    # global_labels_map = {i: k for i, k in enumerate(global_classes)}
+
+    partitions = create_parts(containers, global_classes)
+
+    while included_classes(partitions) != set(global_classes):
+        # print(f"included set: {included_classes(partitions)}")
+        # print(f"global set: {global_classes}")
+        partitions = create_parts(containers, global_classes)
+
+    container_data_partition = {}
+    for i, cont in enumerate(containers):
+        container_data_partition.update({f"{cont}": partitions[i]})
+
+    with open(PARTITIONING, "w") as f:
+        f.write(container_data_partition)
+
+    return container_data_partition
+
+
+def send_partitioned_csv(partition_info: dict, dest_path: str = DATA_DIR):
+    """
+    create training and testing csv files then copy them to each container.
+
+    :param partition_info: dictionary describing classes used in each container
+    :type partition_info: dict
+    """
+    global_train = pd.read_csv(TRAIN_DATA)
+    global_test = pd.read_csv(TEST_DATA)
+    for cont in partition_info:
+        local_train = global_train[
+            global_train["class_name"].isin(partition_info[cont])
+        ]
+        local_test = global_test[global_test["class_name"].isin(partition_info[cont])]
+        local_train.to_csv(f"{cont}_train.csv")
+        local_test.to_csv(f"{cont}_test.csv")
+        cmd(f"lxc exec {cont} -- mkdir {dest_path}", shell=True)
+        cmd(f"lxc file push {cont}_train.csv {cont}/{dest_path}")
+        cmd(f"lxc file push {cont}_test.csv {cont}/{dest_path}")
+
+
+# def unzip_relevant_files(partition_info: dict):
+#     def send_zipped_data(containers: list, path: str = DATA_DIR):
+#         for cont in containers:
+#             cmd(
+#                 f"lxc file push compressed_images_wheat/compressed_images_wheat.zip {cont}/{path}"
+#             )
+#     conts = list(partition_info.keys())
+#     send_zipped_data(conts)
+
+
+
 

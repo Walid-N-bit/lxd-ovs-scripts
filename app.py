@@ -44,6 +44,12 @@ def args_func():
     )
     parser.add_argument("--train", action="store_true", help="start model training")
     parser.add_argument(
+        "--partition",
+        type=int,
+        default=5,
+        help="randomly partition data classes between nodes",
+    )
+    parser.add_argument(
         "--update", action="store_true", help="perform 'git pull' in every container"
     )
     args = parser.parse_args()
@@ -414,6 +420,13 @@ def main():
 
         conts = get_container_names()
         update_nodes(conts)
+
+    if args.partition:
+        from fl_utils import partition_data, send_partitioned_csv
+
+        conts = get_container_names()
+        part_info = partition_data(conts, args.partition)
+        send_partitioned_csv(part_info)
 
 
 if __name__ == "__main__":
