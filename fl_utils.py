@@ -66,7 +66,7 @@ def partition_data(containers: list, parts_nbr: int) -> dict:
     :return: Description
     :rtype: dict
     """
-    import random
+    import random, json
 
     def create_parts(nodes: list, classes: list) -> list[list]:
         result = []
@@ -89,6 +89,7 @@ def partition_data(containers: list, parts_nbr: int) -> dict:
 
     partitions = create_parts(containers, global_classes)
 
+    
     while included_classes(partitions) != set(global_classes):
         # print(f"included set: {included_classes(partitions)}")
         # print(f"global set: {global_classes}")
@@ -99,7 +100,7 @@ def partition_data(containers: list, parts_nbr: int) -> dict:
         container_data_partition.update({f"{cont}": partitions[i]})
 
     with open(PARTITIONING, "w") as f:
-        f.write(container_data_partition)
+        json.dump(container_data_partition, f)
 
     return container_data_partition
 
@@ -120,4 +121,3 @@ def save_partitioned_csv(partition_info: dict, path: str = DATA_DIR):
         local_test = global_test[global_test["class_name"].isin(partition_info[cont])]
         local_train.to_csv(f"{path}/{cont}_train.csv")
         local_test.to_csv(f"{path}/{cont}_test.csv")
-
