@@ -24,6 +24,10 @@ config:
         nameservers:
           addresses: [130.231.240.1, 130.231.240.7]
 devices:
+  data:
+    path: /root/data/
+    source: /home/walid/lxd-ovs-scripts/compressed_images_wheat/
+    type: disk
   eth0:
     nictype: bridged
     parent: ovs_br

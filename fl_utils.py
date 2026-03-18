@@ -9,7 +9,7 @@ import pandas as pd
 TRAIN_DATA = "compressed_images_wheat/train.csv"
 TEST_DATA = "compressed_images_wheat/test.csv"
 PARTITIONING = "compressed_images_wheat/data_partition.json"
-DATA_DIR = "fl_app/compressed_images_wheat/"
+DATA_DIR = "compressed_images_wheat"
 
 
 def start_fed_training(containers: list, server_cont: str):
@@ -104,7 +104,7 @@ def partition_data(containers: list, parts_nbr: int) -> dict:
     return container_data_partition
 
 
-def send_partitioned_csv(partition_info: dict, dest_path: str = DATA_DIR):
+def save_partitioned_csv(partition_info: dict, path: str = DATA_DIR):
     """
     create training and testing csv files then copy them to each container.
 
@@ -118,22 +118,6 @@ def send_partitioned_csv(partition_info: dict, dest_path: str = DATA_DIR):
             global_train["class_name"].isin(partition_info[cont])
         ]
         local_test = global_test[global_test["class_name"].isin(partition_info[cont])]
-        local_train.to_csv(f"{cont}_train.csv")
-        local_test.to_csv(f"{cont}_test.csv")
-        cmd(f"lxc exec {cont} -- mkdir {dest_path}", shell=True)
-        cmd(f"lxc file push {cont}_train.csv {cont}/{dest_path}")
-        cmd(f"lxc file push {cont}_test.csv {cont}/{dest_path}")
-
-
-# def unzip_relevant_files(partition_info: dict):
-#     def send_zipped_data(containers: list, path: str = DATA_DIR):
-#         for cont in containers:
-#             cmd(
-#                 f"lxc file push compressed_images_wheat/compressed_images_wheat.zip {cont}/{path}"
-#             )
-#     conts = list(partition_info.keys())
-#     send_zipped_data(conts)
-
-
-
+        local_train.to_csv(f"{path}/{cont}_train.csv")
+        local_test.to_csv(f"{path}/{cont}_test.csv")
 

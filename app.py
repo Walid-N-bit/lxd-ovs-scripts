@@ -422,11 +422,11 @@ def main():
         update_nodes(conts)
 
     if args.partition:
-        from fl_utils import partition_data, send_partitioned_csv
+        from fl_utils import partition_data, save_partitioned_csv
 
         conts = get_container_names()
         part_info = partition_data(conts, args.partition)
-        send_partitioned_csv(part_info)
+        save_partitioned_csv(part_info)
 
 
 if __name__ == "__main__":
