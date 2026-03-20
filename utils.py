@@ -61,7 +61,16 @@ def load_csv_data(path: str):
 
 def cmd(input: str | list, passwd: bool = False, shell: bool = False) -> str:
     """
-    take input and run as a command. return output.
+    take input and run as a command on shell. return output.
+
+    :param input: input command
+    :type input: str | list
+    :param passwd: does the command require password input
+    :type passwd: bool
+    :param shell: set as true if you need shell functionalities (like > or --)
+    :type shell: bool
+    :return: command output
+    :rtype: str
     """
     if type(input) == str and not shell:
         input = input.split(" ")
