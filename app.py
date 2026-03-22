@@ -324,7 +324,7 @@ def main():
     if args.scan:
         save_sys_data()
 
-    if args.build:
+    elif args.build:
         match args.build:
             case "bridges":
                 nbr_of_brs = int(
@@ -368,7 +368,7 @@ def main():
                 qos = input("\nProvide QoS ID: ").strip()
                 create_queues(q_rates, qos)
 
-    if args.deploy:
+    elif args.deploy:
         conts = get_container_names()
         print(f"\nContainers: {','.join(conts)}")
         print(f"\nTarget repo: {FL_REPO}")
@@ -405,7 +405,7 @@ def main():
                 out = install_dependencies(cont, i)
                 print(out)
 
-    if args.train:
+    elif args.train:
         from fl_utils import start_fed_training
 
         conts = get_container_names()
@@ -413,17 +413,17 @@ def main():
         server = input(f"\nServer container: ").strip()
         start_fed_training(conts, server)
 
-    if args.update:
+    elif args.update:
         from fl_utils import update_nodes
 
         conts = get_container_names()
         update_nodes(conts)
 
-    if args.partition:
+    elif args.partition:
         from fl_utils import partition_data, save_partitioned_csv
 
         conts = get_container_names()
-        server = input(f"\nServer container: ").strip()
+        server = input(f"\nExclude container: ").strip()
         part_info = partition_data(conts, args.partition, server)
         save_partitioned_csv(part_info)
 
