@@ -80,7 +80,8 @@ def partition_data(containers: list, parts_nbr: int, server_cont:str) -> dict:
         for part in class_parts:
             all_classes.extend(part)
         return set(all_classes)
-
+    
+    containers.remove(server_cont)
     global_train = pd.read_csv(TRAIN_DATA)
     # global_test = pd.read_csv(TEST_DATA)
     global_classes = sorted(global_train["class_name"].unique())
@@ -95,7 +96,6 @@ def partition_data(containers: list, parts_nbr: int, server_cont:str) -> dict:
         partitions = create_parts(containers, global_classes)
 
     container_data_partition = {}
-    containers.remove(server_cont)
     for i, cont in enumerate(containers):
         container_data_partition.update({f"{cont}": partitions[i]})
 
