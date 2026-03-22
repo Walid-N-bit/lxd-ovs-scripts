@@ -57,7 +57,7 @@ def update_nodes(containers: list):
         print(out)
 
 
-def partition_data(containers: list, parts_nbr: int) -> dict:
+def partition_data(containers: list, parts_nbr: int, server_cont:str) -> dict:
     """
     Docstring for partition_data
 
@@ -89,13 +89,13 @@ def partition_data(containers: list, parts_nbr: int) -> dict:
 
     partitions = create_parts(containers, global_classes)
 
-    
     while included_classes(partitions) != set(global_classes):
         # print(f"included set: {included_classes(partitions)}")
         # print(f"global set: {global_classes}")
         partitions = create_parts(containers, global_classes)
 
     container_data_partition = {}
+    containers.remove(server_cont)
     for i, cont in enumerate(containers):
         container_data_partition.update({f"{cont}": partitions[i]})
 

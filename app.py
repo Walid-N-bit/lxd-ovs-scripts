@@ -423,7 +423,8 @@ def main():
         from fl_utils import partition_data, save_partitioned_csv
 
         conts = get_container_names()
-        part_info = partition_data(conts, args.partition)
+        server = input(f"\nServer container: ").strip()
+        part_info = partition_data(conts, args.partition, server)
         save_partitioned_csv(part_info)
 
 
