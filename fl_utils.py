@@ -57,7 +57,7 @@ def update_nodes(containers: list):
         print(out)
 
 
-def partition_data(containers: list, parts_nbr: int, server_cont:str) -> dict:
+def partition_data(containers: list, parts_nbr: int, server_cont: str) -> dict:
     """
     Docstring for partition_data
 
@@ -80,13 +80,14 @@ def partition_data(containers: list, parts_nbr: int, server_cont:str) -> dict:
         for part in class_parts:
             all_classes.extend(part)
         return set(all_classes)
-    
-    containers.remove(server_cont)
+
+    if server_cont in containers:
+        containers.remove(server_cont)
+    else:
+        pass
     global_train = pd.read_csv(TRAIN_DATA)
     # global_test = pd.read_csv(TEST_DATA)
     global_classes = sorted(global_train["class_name"].unique())
-
-    # global_labels_map = {i: k for i, k in enumerate(global_classes)}
 
     partitions = create_parts(containers, global_classes)
 
@@ -107,17 +108,48 @@ def partition_data(containers: list, parts_nbr: int, server_cont:str) -> dict:
 
 def save_partitioned_csv(partition_info: dict, path: str = DATA_DIR):
     """
-    create training and testing csv files then copy them to each container.
+    create training and testing csv files for each container.
 
     :param partition_info: dictionary describing classes used in each container
     :type partition_info: dict
     """
-    global_train = pd.read_csv(TRAIN_DATA)
-    global_test = pd.read_csv(TEST_DATA)
+    global_train = pd.read_csv(TRAIN_DATA, index_col=0)
+    global_test = pd.read_csv(TEST_DATA, index_col=0)
     for cont in partition_info:
         local_train = global_train[
             global_train["class_name"].isin(partition_info[cont])
         ]
         local_test = global_test[global_test["class_name"].isin(partition_info[cont])]
-        local_train.to_csv(f"{path}/{cont}_train.csv")
-        local_test.to_csv(f"{path}/{cont}_test.csv")
+        local_train.to_csv(f"{path}/{cont}_train.csv", index=False)
+        local_test.to_csv(f"{path}/{cont}_test.csv", index=False)
+
+
+def replace_col_strings(path: str, col: str, old: str, new: str):
+    """
+    replace strings in all rows of a col with another string
+
+    :param path: file path
+    :type path: str
+    :param col: column name
+    :type col: str
+    :param old: old string text
+    :type old: str
+    :param new: new string text
+    :type new: str
+    """
+
+    """
+    execute the following to use this function:
+
+    files = glob("compressed_images_wheat/cont-*.csv")
+    for f in files:
+        replace_col_strings(
+            f,
+            "path",
+            "compressed_images_wheat",
+            "/root/data",
+        )
+    """
+    df = pd.read_csv(path)
+    df[col] = df[col].replace(old, new, regex=True)
+    df.to_csv(path, index=False)

@@ -382,10 +382,10 @@ def main():
                 "\n### Update and upgrade ###",
                 "sudo apt update -y && sudo apt upgrade -y",
             ),
-            (
-                "\n### Nvidia driver install ###",
-                "sudo apt install nvidia-driver-570 -y",
-            ),
+            # (
+            #     "\n### Nvidia driver install ###",
+            #     "sudo apt install nvidia-driver-570 -y",
+            # ),
             (
                 "\n### Python venv and pip install ###",
                 "sudo apt install -y git python3-pip && sudo apt install python3-venv -y",
@@ -394,6 +394,10 @@ def main():
             (
                 "\n### PyTorch and requirements ###",
                 "source fl_app/venv/bin/activate && pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu130 && pip install -r fl_app/requirements.txt",
+            ),
+            (
+                "\n ### Checking CUDA... ###",
+                "source fl_app/venv/bin/activate && python3 fl_app/check_cuda.py",
             ),
             ("\n ### Rebooting... ###", "sudo reboot"),
         ]
@@ -420,12 +424,21 @@ def main():
         update_nodes(conts)
 
     elif args.partition:
-        from fl_utils import partition_data, save_partitioned_csv
+        from fl_utils import partition_data, save_partitioned_csv, replace_col_strings
+        import glob
 
         conts = get_container_names()
         server = input(f"\nExclude container: ").strip()
         part_info = partition_data(conts, args.partition, server)
         save_partitioned_csv(part_info)
+        files = glob.glob("compressed_images_wheat/cont-*.csv")
+        for f in files:
+            replace_col_strings(
+                f,
+                "path",
+                "compressed_images_wheat",
+                "/root/data",
+            )
 
 
 if __name__ == "__main__":
