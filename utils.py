@@ -166,7 +166,7 @@ def save_logs(output: list, path: str = DFLT_LOG_PATH):
 
 
 def copy_file(src: str, dst: str):
-    cmd(f"sudo cp {src} {dst}")
+    cmd(f"cp {src} {dst}")
 
 
 def delete_file(path: str):
@@ -353,7 +353,7 @@ def id_from_ipv4(ip: str):
 
 
 def get_iface_ipv4(iface: str) -> str:
-    
+
     import socket
     import fcntl
     import struct
