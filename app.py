@@ -291,16 +291,13 @@ def clone_to_container(name: str):
     return output
 
 
-# def install_pip(name: str):
-#     input = f"sudo lxc exec {name} -- bash -c 'sudo apt update && sudo apt install -y git python3-pip'"
-#     output = cmd(input, shell=True)
-#     return output
-
-
-# def install_requirements(name: str):
-#     input = f"sudo lxc exec {name} -- python3 -m pip install --break-system-packages -r fl_app/requirements.txt"
-#     output = cmd(input, shell=True)
-#     return output
+def get_nvidia_driver_version():
+    """
+    query the Nvidia driver version on the host machine. return as string.
+    """
+    command = "nvidia-smi --query-gpu=driver_version --format=csv,noheader"
+    output = cmd(command, shell=True).strip().split(".")
+    return output[0]
 
 
 def install_dependencies(name: str, input: tuple):
@@ -377,15 +374,16 @@ def main():
             .strip()
             .split(",")
         )
+        version = get_nvidia_driver_version()
         inputs = [
             (
                 "\n### Update and upgrade ###",
                 "sudo apt update -y && sudo apt upgrade -y",
             ),
-            # (
-            #     "\n### Nvidia driver install ###",
-            #     "sudo apt install nvidia-driver-570 -y",
-            # ),
+            (
+                "\n### Nvidia driver install ###",
+                f"sudo apt install nvidia-utils-{version} -y",
+            ),
             (
                 "\n### Python venv and pip install ###",
                 "sudo apt install -y git python3-pip && sudo apt install python3-venv -y",
