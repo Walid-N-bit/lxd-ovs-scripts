@@ -51,10 +51,9 @@ def edit_yaml(
 
     yaml = YAML()
 
-    lxdbr0_ipv4, lxdbr0_mask = get_iface_info("lxdbr0")
+    lxdbr0_ipv4, lxdbr0_netmask = get_iface_info("lxdbr0")
     lxdbr0_ip = lxdbr0_ipv4.split(".")
     lxdbr0_ip = ".".join(lxdbr0_ip[:3])
-    lxdbr0_ip = f"{lxdbr0_ip}/{lxdbr0_mask}"
 
     profile = create_temp_profile(path)
     # with open(profile, "r") as f:
@@ -68,6 +67,7 @@ def edit_yaml(
         .replace("vlan_id", f"{vlan_id}")
         .replace("vlan_host", f"{host_id}")
         .replace("lxdbr0_ip", f"{lxdbr0_ip}")
+        .replace("lxdbr0_netmask", f"{lxdbr0_netmask}")
     )
     profile_data["config"]["user.network-config"] = new_config
     profile_data["devices"]["eth0"]["parent"] = ovs_br

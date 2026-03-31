@@ -8,7 +8,7 @@ config:
         dhcp4: false
         dhcp6: false
       eth1:
-        addresses: [lxdbr0_ip.eth1_host/24]
+        addresses: [lxdbr0_ip.eth1_host/lxdbr0_netmask]
         dhcp4: false
         dhcp6: false
         nameservers:
