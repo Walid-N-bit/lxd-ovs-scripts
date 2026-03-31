@@ -51,8 +51,10 @@ def edit_yaml(
 
     yaml = YAML()
 
-    lxdbr0_ip = get_iface_ipv4("lxdbr0").split(".")
+    lxdbr0_ipv4, lxdbr0_mask = get_iface_info("lxdbr0")
+    lxdbr0_ip = lxdbr0_ipv4.split(".")
     lxdbr0_ip = ".".join(lxdbr0_ip[:3])
+    lxdbr0_ip = f"{lxdbr0_ip}/{lxdbr0_mask}"
 
     profile = create_temp_profile(path)
     # with open(profile, "r") as f:

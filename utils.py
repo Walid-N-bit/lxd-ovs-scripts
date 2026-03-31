@@ -352,15 +352,9 @@ def id_from_ipv4(ip: str):
     return host_id
 
 
-def get_iface_ipv4(iface: str) -> str:
+def get_iface_info(iface: str) -> str:
 
-    import socket
-    import fcntl
-    import struct
+    command = f"ip -o -f inet addr show {iface} | awk '{{print $4}}'"
+    ip, netmask = cmd(command, shell=True).strip().split("/")
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    return socket.inet_ntoa(
-        fcntl.ioctl(
-            s.fileno(), 0x8915, struct.pack("256s", iface[:15].encode())  # SIOCGIFADDR
-        )[20:24]
-    )
+    return ip, netmask
