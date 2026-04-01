@@ -14,7 +14,6 @@ PROTOCOLS = "OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13"
 
 # ===== helper functions ===== #
 
-
 def get_port_qos(port: str):
     """
     return QoS object attached to given OVS port name.

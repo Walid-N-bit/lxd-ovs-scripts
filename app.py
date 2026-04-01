@@ -337,6 +337,8 @@ def main():
                     hostname=hostname, br_nbr=nbr_of_brs, controller=controller
                 )
             case "containers":
+                bridges = cmd("sudo ovs-vsctl list-br").splitlines()
+                print("\nBridges: ", *bridges)
                 conts_ids_str = input(
                     "\nProvide a list of container IDs to use (e.g.: 1,2,3,...): "
                 ).strip()
@@ -437,7 +439,7 @@ def main():
                 "compressed_images_wheat",
                 "/root/data",
             )
-        
+
         for cont in part_info:
             print(f"{cont} : {part_info[cont]}")
 
