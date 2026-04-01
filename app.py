@@ -437,6 +437,9 @@ def main():
                 "compressed_images_wheat",
                 "/root/data",
             )
+        
+        for cont in part_info:
+            print(f"{cont} : {part_info[cont]}")
 
 
 if __name__ == "__main__":
