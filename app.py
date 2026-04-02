@@ -414,7 +414,9 @@ def main():
 
         conts = get_container_names()
         print(f"\nContainers: {','.join(conts)}")
-        server = input(f"\nServer container()Default: {conts[0]}: ").strip() or conts[0]
+        server = (
+            input(f"\nServer container (Default: {conts[0]}): ").strip() or conts[0]
+        )
         start_fed_training(conts, server)
 
     elif args.update:
