@@ -430,6 +430,7 @@ def main():
         import glob
 
         conts = get_container_names()
+        print(f"\nContainers: {','.join(conts)}")
         server = input(f"\nExclude container: ").strip()
         part_info = partition_data(conts, args.partition, server)
         save_partitioned_csv(part_info)
