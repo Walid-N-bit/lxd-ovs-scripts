@@ -12,7 +12,7 @@ PARTITIONING = "compressed_images_wheat/data_partition.json"
 DATA_DIR = "compressed_images_wheat"
 
 
-def start_fed_training(containers: list, server_cont: str):
+def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
     """
     create tmux panes and send commands to each to start the federated learning process
     """
@@ -48,7 +48,7 @@ def start_fed_training(containers: list, server_cont: str):
     cmd(["tmux", "split-window", "-h"])
     cmd(send_keys(f"lxc shell {server_cont}"))
     cmd(send_keys("cd fl_app ; source venv/bin/activate"))
-    cmd(send_keys("flwr run . local-deployment --stream"))
+    cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
 
 
 def update_nodes(containers: list):
