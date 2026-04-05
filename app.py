@@ -417,7 +417,7 @@ def main():
         server = (
             input(f"\nServer container (Default: {conts[0]}): ").strip() or conts[0]
         )
-        start_fed_training(conts, server, "root/data/")
+        start_fed_training(conts, server, "/root/data/")
 
     elif args.update:
         from fl_utils import update_nodes
