@@ -434,7 +434,7 @@ def main():
         server = input(f"\nExclude container: ").strip()
         part_info = partition_data(conts, args.partition, server)
         save_partitioned_csv(part_info)
-        files = glob.glob("compressed_images_wheat/cont-*.csv")
+        files = glob.glob("compressed_images_wheat/*.csv")
         for f in files:
             replace_col_strings(
                 f,
