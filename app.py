@@ -426,9 +426,9 @@ def main():
             input(f"\nSelect at least 2 client containers (Default: all): ")
             .strip()
             .split(",")
-        ) or conts
-
-        start_fed_training(selected_conts, server)
+        )
+        conts = selected_conts if selected_conts else conts
+        start_fed_training(conts, server)
 
     elif args.update:
         from fl_utils import update_nodes
