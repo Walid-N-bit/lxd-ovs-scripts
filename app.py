@@ -417,7 +417,13 @@ def main():
         server = (
             input(f"\nServer container (Default: {conts[0]}): ").strip() or conts[0]
         )
-        start_fed_training(conts, server)
+        selected_conts = (
+            input(f"\nSelect at least 2 client containers (Default: all): ")
+            .strip()
+            .split(",")
+        ) or conts
+
+        start_fed_training(selected_conts, server)
 
     elif args.update:
         from fl_utils import update_nodes
