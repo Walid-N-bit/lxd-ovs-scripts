@@ -32,7 +32,8 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
 
     # start clients
     clients = containers.copy()
-    clients.remove(server_cont)
+    if server_cont in clients:
+        clients.remove(server_cont)
     nbr_parts = len(clients)
     for i, cont in enumerate(clients):
         commands = [
