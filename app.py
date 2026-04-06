@@ -422,12 +422,10 @@ def main():
         server = (
             input(f"\nServer container (Default: {conts[0]}): ").strip() or conts[0]
         )
-        selected_conts = (
-            input(f"\nSelect at least 2 client containers (Default: all): ")
-            .strip()
-            .split(",")
-        )
-        conts = selected_conts if selected_conts else conts
+        selected_conts = input(
+            f"\nSelect at least 2 client containers (Default: all): "
+        ).strip()
+        conts = selected_conts.split(",") if selected_conts else conts
         start_fed_training(conts, server)
 
     elif args.update:
