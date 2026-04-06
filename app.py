@@ -422,8 +422,10 @@ def main():
     elif args.update:
         from fl_utils import update_nodes
 
+        server = input("\nServer container: \n").strip()
+
         conts = get_container_names()
-        update_nodes(conts)
+        update_nodes(conts, server)
 
     elif args.partition:
         from fl_utils import partition_data, save_partitioned_csv, replace_col_strings

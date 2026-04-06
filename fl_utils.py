@@ -51,9 +51,23 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
 
 
-def update_nodes(containers: list):
+def update_nodes(containers: list, server: str = ""):
+    """
+    perform git pull and update local repos on clients and server nodes.
+
+    :param containers: list of container names
+    :type containers: list
+    :param server: server container name
+    :type server: str
+    """
+    if server:
+        s_out = cmd(
+            f"lxc exec {server} -- bash -c 'git -C fl_app fetch origin && git -C fl_app reset --hard origin/main && git -C fl_app clean -fd'"
+        )
+        print(s_out)
     for cont in containers:
         out = cmd(f"lxc exec {cont} -- git -C fl_app pull")
+
         print(out)
 
 
