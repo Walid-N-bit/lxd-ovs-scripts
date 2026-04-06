@@ -435,8 +435,9 @@ def main():
 
         conts = get_container_names()
         print(f"\nContainers: {','.join(conts)}")
-        server = input("\nServer container: \n").strip()
-
+        server = (
+            input(f"\nServer container (Default: {conts[0]}): ").strip() or conts[0]
+        )
         update_nodes(conts, server)
 
     elif args.partition:
