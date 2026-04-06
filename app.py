@@ -368,6 +368,8 @@ def main():
                 create_queues(q_rates, qos)
 
     elif args.deploy:
+        from fl_utils import save_original_toml
+
         conts = get_container_names()
         print(f"\nContainers: {','.join(conts)}")
         print(f"\nTarget repo: {FL_REPO}")
@@ -401,13 +403,16 @@ def main():
             ),
             ("\n ### Rebooting... ###", "sudo reboot"),
         ]
+
         for cont in target_conts:
             print(f"\n##### {cont} ####\n")
             out1 = clone_to_container(cont)
             print(out1)
+
             for i in inputs:
                 out = install_dependencies(cont, i)
                 print(out)
+        save_original_toml(target_conts[0])
 
     elif args.train:
         from fl_utils import start_fed_training

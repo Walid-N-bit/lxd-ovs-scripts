@@ -51,6 +51,30 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
 
 
+def save_original_toml(container: str):
+    cont_in = "scp /root/fl_app/pyproject.toml /root/data/pyproject_original.toml"
+    out = cmd(f"lxc exec {container} -- bash -c '{cont_in}'", shell=True)
+    print(out)
+
+
+def save_modified_toml(container: str):
+    cont_in = "scp /root/fl_app/pyproject.toml /root/data/pyproject_copy.toml"
+    out = cmd(f"lxc exec {container} -- bash -c '{cont_in}'", shell=True)
+    print(out)
+
+
+def reset_toml(container):
+    cont_in = "scp /root/data/pyproject_original.toml /root/fl_app/pyproject.toml"
+    out = cmd(f"lxc exec {container} -- bash -c '{cont_in}'", shell=True)
+    print(out)
+
+
+def restore_modified_tol(container):
+    cont_in = "scp /root/data/pyproject_copy.toml /root/fl_app/pyproject.toml"
+    out = cmd(f"lxc exec {container} -- bash -c '{cont_in}'", shell=True)
+    print(out)
+
+
 def update_nodes(containers: list, server: str = ""):
     """
     perform git pull and update local repos on clients and server nodes.
@@ -61,14 +85,14 @@ def update_nodes(containers: list, server: str = ""):
     :type server: str
     """
     if server:
-        s_out = cmd(
-            f"lxc exec {server} -- bash -c 'git -C fl_app fetch origin && git -C fl_app reset --hard origin/main && git -C fl_app clean -fd'"
-        )
-        print(s_out)
+        save_modified_toml(server)
+        reset_toml(server)
     for cont in containers:
         out = cmd(f"lxc exec {cont} -- git -C fl_app pull")
-
         print(out)
+
+    if server:
+        restore_modified_tol(server)
 
 
 def partition_data(containers: list, parts_nbr: int, server_cont: str) -> dict:
