@@ -46,8 +46,7 @@ def args_func():
     parser.add_argument(
         "--partition",
         type=int,
-        default=5,
-        help="randomly partition data classes between nodes",
+        help="randomly partition data classes between nodes. if 0 is passed, then use the info in the json file",
     )
     parser.add_argument(
         "--update", action="store_true", help="perform 'git pull' in every container"
@@ -438,14 +437,23 @@ def main():
         )
         update_nodes(conts, server)
 
-    elif args.partition:
-        from fl_utils import partition_data, save_partitioned_csv, replace_col_strings
+    elif args.partition or args.partition == 0:
+        from fl_utils import (
+            partition_data,
+            save_partitioned_csv,
+            replace_col_strings,
+            PARTITIONING,
+        )
         import glob
 
         conts = get_container_names()
         print(f"\nContainers: {','.join(conts)}")
-        server = input(f"\nExclude container: ").strip()
-        part_info = partition_data(conts, args.partition, server)
+        if args.partition == 0:
+            print(f"\nReading partition info...")
+            part_info = read_json_file(PARTITIONING)
+        else:
+            server = input(f"\nExclude container: ").strip()
+            part_info = partition_data(conts, args.partition, server)
         save_partitioned_csv(part_info)
         files = glob.glob("compressed_images_wheat/*.csv")
         for f in files:
