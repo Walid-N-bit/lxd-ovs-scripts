@@ -480,8 +480,6 @@ def main():
                 f"lxc exec {c} -- git -C fl_app reset --hard origin/main", shell=True
             )
             print(out)
-            out = cmd(f"rm ", shell=True)
-            print(out)
         out = cmd(
             f"lxc exec {conts[0]} -- scp fl_app/pyproject.toml /root/data/pyproject_copy.toml",
             shell=True,
