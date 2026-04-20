@@ -51,6 +51,11 @@ def args_func():
     parser.add_argument(
         "--update", action="store_true", help="perform 'git pull' in every container"
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="hard-reset to remote repo on all containers",
+    )
     args = parser.parse_args()
     return args
 
@@ -463,9 +468,30 @@ def main():
                 "compressed_images_wheat",
                 "/root/data",
             )
-
         for cont in part_info:
             print(f"{cont} : {part_info[cont]}")
+
+    elif args.reset:
+        conts = get_container_names()
+        for c in conts:
+            out = cmd(f"lxc exec {c} -- git -C fl_app fetch origin", shell=True)
+            print(out)
+            out = cmd(
+                f"lxc exec {c} -- git -C fl_app reset --hard origin/main", shell=True
+            )
+            print(out)
+            out = cmd(f"rm ", shell=True)
+            print(out)
+        out = cmd(
+            f"lxc exec {conts[0]} -- scp fl_app/pyproject.toml /root/data/pyproject_copy.toml",
+            shell=True,
+        )
+        print(out)
+        out = cmd(
+            f"lxc exec {conts[0]} -- scp fl_app/pyproject.toml /root/data/pyproject_original.toml",
+            shell=True,
+        )
+        print(out)
 
 
 if __name__ == "__main__":
