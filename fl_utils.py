@@ -63,7 +63,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             pass
 
     # start trining
-    if server_cont != "none":
+    if is_local_cont(server_cont) and server_cont != "none":
         cmd(["tmux", "split-window", "-h"])
         cmd(send_keys(f"lxc shell {server_cont}"))
         cmd(send_keys("cd fl_app ; source venv/bin/activate"))
