@@ -270,17 +270,17 @@ def run_test():
     )
 
 
-def get_container_names() -> list[str]:
-    """
-    return a list of container names in the host
+# def get_container_names() -> list[str]:
+#     """
+#     return a list of container names in the host
 
-    :return: container names
-    :rtype: list[str]
-    """
-    input = "lxc list -c n -f csv"
-    output = cmd(input)
-    containers = [c for c in output.splitlines() if ("cont-" in c)]
-    return containers
+#     :return: container names
+#     :rtype: list[str]
+#     """
+#     input = "lxc list -c n -f csv"
+#     output = cmd(input)
+#     containers = [c for c in output.splitlines() if ("cont-" in c)]
+#     return containers
 
 
 def clone_to_container(name: str):
@@ -424,8 +424,12 @@ def main():
         conts = get_container_names()
         print(f"\nContainers: {','.join(conts)}")
         server = (
-            input(f"\nServer container (Default: {conts[0]}): ").strip() or conts[0]
+            # input(f"\nServer container (Default: {conts[0]}): ").strip() or conts[0]
+            input(
+                f"\nServer container (Default: {conts[0]}, type 'none' for no server on this machine): "
+            ).strip()
         )
+
         selected_conts = input(
             f"\nSelect at least 2 client containers (Default: all): "
         ).strip()

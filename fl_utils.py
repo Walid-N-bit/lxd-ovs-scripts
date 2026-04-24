@@ -4,6 +4,7 @@ This module is designed to run this application: https://github.com/Walid-N-bit/
 """
 
 from utils import cmd, get_host_id
+from containers import get_container_names
 import pandas as pd
 
 TRAIN_DATA = "compressed_images_wheat/train.csv"
@@ -17,18 +18,28 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     create tmux panes and send commands to each to start the federated learning process
     """
 
+    containers = sorted(containers)
+
     def send_keys(keys: str):
         return ["tmux", "send-keys", keys, "C-m"]
+
+    def is_local_cont(cont: str) -> bool:
+        local_conts = get_container_names()
+        if cont in local_conts:
+            return True
+        else:
+            return False
 
     # create session
     sess_out = cmd("tmux new -d")
     print(sess_out)
     # start server
-    id = get_host_id("vm", server_cont)
-    server_ip = f"10.0.200.{id}"
-    cmd(send_keys(f"lxc shell {server_cont}"))
-    cmd(send_keys("cd fl_app ; source venv/bin/activate"))
-    cmd(send_keys("flower-superlink --insecure"))
+    if server_cont is not "none":
+        id = get_host_id("vm", server_cont)
+        server_ip = f"10.0.200.{id}"
+        cmd(send_keys(f"lxc shell {server_cont}"))
+        cmd(send_keys("cd fl_app ; source venv/bin/activate"))
+        cmd(send_keys("flower-superlink --insecure"))
 
     # start clients
     clients = containers.copy()
@@ -36,14 +47,17 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         clients.remove(server_cont)
     nbr_parts = len(clients)
     for i, cont in enumerate(clients):
-        commands = [
-            f"lxc shell {cont}",
-            "cd fl_app ; source venv/bin/activate",
-            f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={i} num-partitions={nbr_parts}'",
-        ]
-        cmd("tmux split-window -h")
-        for c in commands:
-            cmd(send_keys(c))
+        if is_local_cont(cont):
+            commands = [
+                f"lxc shell {cont}",
+                "cd fl_app ; source venv/bin/activate",
+                f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={i} num-partitions={nbr_parts}'",
+            ]
+            cmd("tmux split-window -h")
+            for c in commands:
+                cmd(send_keys(c))
+        else:
+            pass
 
     # start trining
     cmd(["tmux", "split-window", "-h"])

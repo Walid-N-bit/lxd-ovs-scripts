@@ -129,3 +129,16 @@ def create_conts_for_br(
 
     print(check)
     save_logs([cont_out])
+
+
+def get_container_names() -> list[str]:
+    """
+    return a list of container names in the host
+
+    :return: container names
+    :rtype: list[str]
+    """
+    input = "lxc list -c n -f csv"
+    output = cmd(input)
+    containers = [c for c in output.splitlines() if ("cont-" in c)]
+    return containers
