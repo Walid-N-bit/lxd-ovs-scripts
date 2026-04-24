@@ -34,7 +34,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     sess_out = cmd("tmux new -d")
     print(sess_out)
     # start server
-    if server_cont is not "none":
+    if server_cont != "none":
         id = get_host_id("vm", server_cont)
         server_ip = f"10.0.200.{id}"
         cmd(send_keys(f"lxc shell {server_cont}"))
