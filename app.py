@@ -424,10 +424,7 @@ def main():
         conts = get_container_names()
         print(f"\nContainers: {','.join(conts)}")
         server = (
-            # input(f"\nServer container (Default: {conts[0]}): ").strip() or conts[0]
-            input(
-                f"\nServer container (Default: {conts[0]}, type 'none' for no server on this machine): "
-            ).strip()
+            input(f"\nServer container (Default: {conts[0]}): ").strip() or conts[0]
         )
 
         selected_conts = input(

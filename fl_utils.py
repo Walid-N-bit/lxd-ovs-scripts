@@ -34,12 +34,15 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     sess_out = cmd("tmux new -d")
     print(sess_out)
     # start server
-    if server_cont != "none":
+    if is_local_cont(server_cont):
         id = get_host_id("vm", server_cont)
         server_ip = f"10.0.200.{id}"
         cmd(send_keys(f"lxc shell {server_cont}"))
         cmd(send_keys("cd fl_app ; source venv/bin/activate"))
         cmd(send_keys("flower-superlink --insecure"))
+    else:
+        id = server_cont[5:]
+        server_ip = f"10.0.200.{id}"
 
     # start clients
     clients = containers.copy()
@@ -47,7 +50,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         clients.remove(server_cont)
     nbr_parts = len(clients)
     for i, cont in enumerate(clients):
-        if is_local_cont(cont) and server_cont != "none":
+        if is_local_cont(cont):
             commands = [
                 f"lxc shell {cont}",
                 "cd fl_app ; source venv/bin/activate",
@@ -60,10 +63,11 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             pass
 
     # start trining
-    cmd(["tmux", "split-window", "-h"])
-    cmd(send_keys(f"lxc shell {server_cont}"))
-    cmd(send_keys("cd fl_app ; source venv/bin/activate"))
-    cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
+    if server_cont != "none":
+        cmd(["tmux", "split-window", "-h"])
+        cmd(send_keys(f"lxc shell {server_cont}"))
+        cmd(send_keys("cd fl_app ; source venv/bin/activate"))
+        cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
 
 
 def save_original_toml(container: str):
