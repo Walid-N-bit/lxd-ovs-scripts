@@ -32,6 +32,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
 
     # create session
     sess_out = cmd("tmux new -d")
+
     print(sess_out)
     # start server
     if is_local_cont(server_cont):
@@ -49,6 +50,9 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     if server_cont in clients:
         clients.remove(server_cont)
     nbr_parts = len(clients)
+
+    print(f"\n{clients = }\n")
+    
     for i, cont in enumerate(clients):
         if is_local_cont(cont):
             commands = [
@@ -59,8 +63,6 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             cmd("tmux split-window -h")
             for c in commands:
                 cmd(send_keys(c))
-        else:
-            pass
 
     # start trining
     if is_local_cont(server_cont):
