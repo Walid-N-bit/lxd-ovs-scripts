@@ -47,7 +47,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         clients.remove(server_cont)
     nbr_parts = len(clients)
     for i, cont in enumerate(clients):
-        if is_local_cont(cont):
+        if is_local_cont(cont) and cont != "none":
             commands = [
                 f"lxc shell {cont}",
                 "cd fl_app ; source venv/bin/activate",
