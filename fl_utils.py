@@ -6,6 +6,7 @@ This module is designed to run this application: https://github.com/Walid-N-bit/
 from utils import cmd, get_host_id
 from containers import get_container_names
 import pandas as pd
+import time
 
 TRAIN_DATA = "compressed_images_wheat/train.csv"
 TEST_DATA = "compressed_images_wheat/test.csv"
@@ -52,7 +53,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     nbr_parts = len(clients)
 
     print(f"\n{clients = }\n")
-    
+
     for i, cont in enumerate(clients):
         if is_local_cont(cont):
             commands = [
@@ -64,11 +65,13 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             for c in commands:
                 cmd(send_keys(c))
 
+    time.sleep(2)
     # start trining
     if is_local_cont(server_cont):
         cmd(["tmux", "split-window", "-h"])
         cmd(send_keys(f"lxc shell {server_cont}"))
         cmd(send_keys("cd fl_app ; source venv/bin/activate"))
+        time.sleep(1)
         cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
 
 
