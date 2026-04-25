@@ -81,9 +81,6 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     def send_keys(pane: int, keys: str):
         return ["tmux", "send-keys", "-t", f"0.{pane}", keys, "C-m"]
 
-    def send_keys(keys: str):
-        return ["tmux", "send-keys", keys, "C-m"]
-
     def is_local_cont(cont: str) -> bool:
         local_conts = get_container_names()
         if cont in local_conts:
