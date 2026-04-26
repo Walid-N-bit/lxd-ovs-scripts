@@ -41,7 +41,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         server_ip = f"10.0.200.{id}"
         cmd(send_keys(f"lxc shell {server_cont}"))
         cmd(send_keys("cd fl_app ; source venv/bin/activate"))
-        cmd(send_keys("flower-superlink --insecure"))
+        cmd(send_keys("FLWR_LOG_LEVEL=DEBUG flower-superlink --insecure"))
     else:
         id = server_cont[5:]
         server_ip = f"10.0.200.{id}"
