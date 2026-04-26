@@ -14,72 +14,15 @@ PARTITIONING = "compressed_images_wheat/data_partition.json"
 DATA_DIR = "compressed_images_wheat"
 
 
-# def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
-#     """
-#     create tmux panes and send commands to each to start the federated learning process
-#     """
-
-#     containers = sorted(containers)
-
-#     def send_keys(keys: str):
-#         return ["tmux", "send-keys", keys, "C-m"]
-
-#     def is_local_cont(cont: str) -> bool:
-#         local_conts = get_container_names()
-#         if cont in local_conts:
-#             return True
-#         else:
-#             return False
-
-#     # create session
-#     sess_out = cmd("tmux new -d")
-
-#     print(sess_out)
-#     # start server
-#     if is_local_cont(server_cont):
-#         id = get_host_id("vm", server_cont)
-#         server_ip = f"10.0.200.{id}"
-#         cmd(send_keys(f"lxc shell {server_cont}"))
-#         cmd(send_keys("cd fl_app ; source venv/bin/activate"))
-#         cmd(send_keys("flower-superlink --insecure"))
-#     else:
-#         id = server_cont[5:]
-#         server_ip = f"10.0.200.{id}"
-
-#     # start clients
-#     clients = containers.copy()
-#     if server_cont in clients:
-#         clients.remove(server_cont)
-#     nbr_parts = len(clients)
-
-#     print(f"\n{clients = }\n")
-
-#     for i, cont in enumerate(clients):
-#         if is_local_cont(cont):
-#             commands = [
-#                 f"lxc shell {cont}",
-#                 "cd fl_app ; source venv/bin/activate",
-#                 f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={i} num-partitions={nbr_parts}'",
-#             ]
-#             cmd("tmux split-window -h")
-#             for c in commands:
-#                 cmd(send_keys(c))
-
-#     time.sleep(2)
-#     # start trining
-#     if is_local_cont(server_cont):
-#         cmd(["tmux", "split-window", "-h"])
-#         cmd(send_keys(f"lxc shell {server_cont}"))
-#         cmd(send_keys("cd fl_app ; source venv/bin/activate"))
-#         time.sleep(1)
-#         cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
-
-
 def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
+    """
+    create tmux panes and send commands to each to start the federated learning process
+    """
+
     containers = sorted(containers)
 
-    def send_keys(pane: int, keys: str):
-        return ["tmux", "send-keys", "-t", f"0.{pane}", keys, "C-m"]
+    def send_keys(keys: str):
+        return ["tmux", "send-keys", keys, "C-m"]
 
     def is_local_cont(cont: str) -> bool:
         local_conts = get_container_names()
@@ -88,46 +31,102 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         else:
             return False
 
-    # Create session
-    cmd("tmux new-session -d -s fl")
+    # create session
+    sess_out = cmd("tmux new -d")
 
-    pane = 0  # track pane index
-
-    # Start server in pane 0
+    print(sess_out)
+    # start server
     if is_local_cont(server_cont):
         id = get_host_id("vm", server_cont)
         server_ip = f"10.0.200.{id}"
-        cmd(send_keys(pane, f"lxc shell {server_cont}"))
-        cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
-        cmd(send_keys(pane, "flower-superlink --insecure"))
+        cmd(send_keys(f"lxc shell {server_cont}"))
+        cmd(send_keys("cd fl_app ; source venv/bin/activate"))
+        cmd(send_keys("flower-superlink --insecure"))
     else:
         id = server_cont[5:]
         server_ip = f"10.0.200.{id}"
 
-    # Start clients, each in their own pane
-    clients = [c for c in containers if c != server_cont]
+    # start clients
+    clients = containers.copy()
+    if server_cont in clients:
+        clients.remove(server_cont)
     nbr_parts = len(clients)
-    for i, cont in enumerate(clients):
-        pane += 1
-        cmd(["tmux", "split-window", "-t", "fl", "-h"])
-        if is_local_cont(cont):
-            cmd(send_keys(pane, f"lxc shell {cont}"))
-            cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
-            cmd(
-                send_keys(
-                    pane,
-                    f"flower-supernode --insecure --superlink {server_ip}:9092 "
-                    f"--node-config 'partition-id={i} num-partitions={nbr_parts}'",
-                )
-            )
 
-    # Start flwr run in a new pane
+    print(f"\n{clients = }\n")
+
+    for i, cont in enumerate(clients):
+        if is_local_cont(cont):
+            commands = [
+                f"lxc shell {cont}",
+                "cd fl_app ; source venv/bin/activate",
+                f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={i} num-partitions={nbr_parts}'",
+            ]
+            cmd("tmux split-window -h")
+            for c in commands:
+                cmd(send_keys(c))
+
+    time.sleep(3)
+    # start trining
     if is_local_cont(server_cont):
-        pane += 1
-        cmd(["tmux", "split-window", "-t", "fl", "-h"])
-        cmd(send_keys(pane, f"lxc shell {server_cont}"))
-        cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
-        cmd(send_keys(pane, f"flwr run {pyproject_path} local-deployment --stream"))
+        cmd(["tmux", "split-window", "-h"])
+        cmd(send_keys(f"lxc shell {server_cont}"))
+        cmd(send_keys("cd fl_app ; source venv/bin/activate"))
+        cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
+
+
+# def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
+#     containers = sorted(containers)
+
+#     def send_keys(pane: int, keys: str):
+#         return ["tmux", "send-keys", "-t", f"0.{pane}", keys, "C-m"]
+
+#     def is_local_cont(cont: str) -> bool:
+#         local_conts = get_container_names()
+#         if cont in local_conts:
+#             return True
+#         else:
+#             return False
+
+#     # Create session
+#     cmd("tmux new-session -d -s fl")
+
+#     pane = 0  # track pane index
+
+#     # Start server in pane 0
+#     if is_local_cont(server_cont):
+#         id = get_host_id("vm", server_cont)
+#         server_ip = f"10.0.200.{id}"
+#         cmd(send_keys(pane, f"lxc shell {server_cont}"))
+#         cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
+#         cmd(send_keys(pane, "flower-superlink --insecure"))
+#     else:
+#         id = server_cont[5:]
+#         server_ip = f"10.0.200.{id}"
+
+#     # Start clients, each in their own pane
+#     clients = [c for c in containers if c != server_cont]
+#     nbr_parts = len(clients)
+#     for i, cont in enumerate(clients):
+#         pane += 1
+#         cmd(["tmux", "split-window", "-t", "fl", "-h"])
+#         if is_local_cont(cont):
+#             cmd(send_keys(pane, f"lxc shell {cont}"))
+#             cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
+#             cmd(
+#                 send_keys(
+#                     pane,
+#                     f"flower-supernode --insecure --superlink {server_ip}:9092 "
+#                     f"--node-config 'partition-id={i} num-partitions={nbr_parts}'",
+#                 )
+#             )
+
+#     # Start flwr run in a new pane
+#     if is_local_cont(server_cont):
+#         pane += 1
+#         cmd(["tmux", "split-window", "-t", "fl", "-h"])
+#         cmd(send_keys(pane, f"lxc shell {server_cont}"))
+#         cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
+#         cmd(send_keys(pane, f"flwr run {pyproject_path} local-deployment --stream"))
 
 
 def save_original_toml(container: str):
