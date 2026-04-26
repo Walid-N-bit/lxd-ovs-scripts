@@ -65,14 +65,16 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             cmd("tmux split-window -h")
             for c in commands:
                 cmd(send_keys(c))
-
-    time.sleep(3)
+    time.sleep(10)
     # start trining
     if is_local_cont(server_cont):
         cmd(["tmux", "split-window", "-h"])
         cmd(send_keys(f"lxc shell {server_cont}"))
         cmd(send_keys("cd fl_app ; source venv/bin/activate"))
         cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
+
+    # to adjust panes
+    cmd("tmux select-layout tiled")
 
 
 # def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
