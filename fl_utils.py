@@ -52,7 +52,8 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         clients.remove(server_cont)
     nbr_parts = len(clients)
 
-    print(f"\n{clients = }\n")
+    print(f"\n{clients = }")
+    print(f"{server_ip = }\n")
 
     for i, cont in enumerate(clients):
         if is_local_cont(cont):
