@@ -140,6 +140,8 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         cont: {"supernode-id": i, "pane": 0} for i, cont in enumerate(all_clients)
     }
 
+    print(f"\n{all_clients = }\n")
+
     #   2. determine if current host is local or remote
     is_server_local = server_cont in all_local_conts
 
