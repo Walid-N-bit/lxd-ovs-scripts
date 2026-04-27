@@ -38,13 +38,18 @@ def is_local_cont(cont: str) -> bool:
     return cont in get_local_containers()
 
 
-def lxc_exec(cont: str, bash_cmd: str) -> str:
+def lxc_exec(cont: str, bash_cmd: str, ignore_errors: bool = False) -> str:
     result = subprocess.run(
         ["lxc", "exec", cont, "--", "bash", "-c", bash_cmd],
         capture_output=True,
         text=True,
     )
-    return result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    if result.returncode != 0 and not ignore_errors:
+        # Detect common LXD errors
+        if any(err in output.lower() for err in ["error:", "not found", "invalid"]):
+            raise RuntimeError(f"lxc exec failed for '{cont}': {output.strip()[:300]}")
+    return output
 
 
 def get_server_ip(server_cont: str) -> str:
@@ -98,24 +103,6 @@ def tmux_tile():
 # ── Core operations ───────────────────────────────────────────────────────────
 
 
-# def cleanup_container(cont: str):
-#     print(f"  Cleaning {cont}...")
-#     lxc_exec(
-#         cont,
-#         (
-#             # 1. Kill ALL flower/flwr processes aggressively
-#             "pkill -9 -f 'flower-' 2>/dev/null; "
-#             "pkill -9 -f 'flwr ' 2>/dev/null; "
-#             # 2. Force free ports 9092 & 9093 (if fuser available)
-#             "command -v fuser >/dev/null && fuser -k 9092/tcp 2>/dev/null; "
-#             "command -v fuser >/dev/null && fuser -k 9093/tcp 2>/dev/null; "
-#             # 3. Wait for kernel to release ports
-#             "sleep 3; "
-#             # 4. Clear state
-#             "rm -rf /root/.flwr/apps/ /root/.flwr/superlink/; "
-#             "echo cleaned"
-#         ),
-#     )
 def cleanup_container(cont: str):
     print(f"  Cleaning {cont}...")
 
@@ -144,6 +131,7 @@ def cleanup_container(cont: str):
         pkill -9 -f 'ray::' 2>/dev/null
         sleep 1
     """,
+        ignore_errors=True,
     )
 
     # 3. Force-kill any PIDs that were holding our ports (in case patterns missed)
@@ -258,16 +246,6 @@ def wait_for_nodes(
         elapsed = int(time.time() - start)
         print(f"  [{elapsed}s] {count}/{expected} nodes connected", end="\r")
 
-        # if count >= expected:
-        #     print(f"\n  All {expected} nodes connected after {elapsed}s.")
-        #     if has_remote:
-        #         # Remote nodes need extra time to load venv + ClientApp after connecting
-        #         print(f"  Giving remote nodes 15s to finish loading ClientApp...")
-        #         for i in range(15, 0, -1):
-        #             print(f"  Starting in {i}s...  ", end="\r")
-        #             time.sleep(1)
-        #         print()
-        #     return True
         if count >= expected:
             print(f"\n  All {expected} nodes connected after {elapsed}s.")
             if has_remote:
@@ -307,6 +285,27 @@ def collect_logs(clients: list):
                 cont, f"tail -20 /tmp/supernode_{cont}.log 2>/dev/null || echo 'no log'"
             )
         )
+
+
+def wait_for_port_open(cont: str, ip: str, port: int, timeout: int = 30) -> bool:
+    """Wait until a port is accepting connections (from inside the container)."""
+    print(f"  Waiting for {ip}:{port} to be ready...")
+    start = time.time()
+    while time.time() - start < timeout:
+        # Use bash built-in tcp test (no netcat dependency)
+        result = lxc_exec(
+            cont,
+            f"""
+            timeout 1 bash -c 'echo > /dev/tcp/{ip}/{port}' 2>/dev/null && echo OPEN || echo CLOSED
+        """,
+            ignore_errors=True,
+        )
+        if "OPEN" in result:
+            print(f"  Port {port} is ready.")
+            return True
+        time.sleep(1)
+    print(f"  Timeout waiting for port {port}")
+    return False
 
 
 # ── Main launcher ─────────────────────────────────────────────────────────────
@@ -350,9 +349,7 @@ def start_fed_training(
 
     # ── 1. Clean ──────────────────────────────────────────────────────────────
     print("=== Cleaning stale state ===")
-    clean_targets = (
-        ([server_cont] if is_server_host else []) + my_local_clients + my_remote_clients
-    )
+    clean_targets = ([server_cont] if is_server_host else []) + my_local_clients
     for cont in clean_targets:
         cleanup_container(cont)
 
@@ -362,7 +359,7 @@ def start_fed_training(
 
     # Track pane IDs — first pane already exists after new-session
     result = subprocess.run(
-        ["tmux", "list-panes", "-t", SESSION, "-F", f"#{pane_id}"],
+        ["tmux", "list-panes", "-t", SESSION, "-F", "#{pane_id}"],
         capture_output=True,
         text=True,
     )
@@ -395,6 +392,8 @@ def start_fed_training(
         print(f"\n=== Starting SuperLink ===")
         start_superlink_tmux(server_cont, pane_ids[pane_cursor])
         pane_cursor += 1
+
+        wait_for_port_open(server_cont, server_ip, 9092, timeout=20)
 
     # ── 4. Start local SuperNodes in tmux panes ───────────────────────────────
     if my_local_clients:
