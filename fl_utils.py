@@ -28,9 +28,12 @@ def send_keys(pane: int, keys: str, session: str = ""):
     :return: tmux command output
     :rtype: list[str]
     """
-    o1 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", keys])
-    o2 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", "C-m"])
-    return o1, o2
+    try:
+        o1 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", keys])
+        o2 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", "C-m"])
+    except Exception as e:
+        print(f"ERROR: {e}")
+        print(f"{o1}\n{o2}")
 
 
 def bordered_print(text: str):
@@ -69,8 +72,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             "source venv/bin/activate",
         ]
         for c in cont_commands:
-            out = send_keys(pane, c, session)
-            print(out)
+            send_keys(pane, c, session)
 
     # shelved for later
     # def check_supernodes_connect() -> bool:
@@ -100,6 +102,8 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     #   4. create tmux session
     bordered_print("starting new session")
     session_name = "fl_session"
+    cmd(["tmux", "kill-server"])
+    time.sleep(0.2)
     cmd(["tmux", "new", "-d", "-s", session_name])
 
     #   5. create panes in tmux session for local containers
@@ -131,8 +135,9 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     bordered_print("Starting Server SuperLink")
     superlink_command = "flower-superlink --insecure"
     if is_server_local:
+        init_cont(server_cont, 0, session_name)
         send_keys(0, superlink_command, session_name)
-    time.sleep(3)
+    time.sleep(2)
 
     #   8. launch supernodes in local containers
     bordered_print("Starting SuperNodes")
@@ -140,8 +145,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         sn_id = clients_info.get(cont).get("supernode-id")
         pane = clients_info.get(cont).get("pane")
         supernode_command = f"flower-supernode --insecure --superlink {server_ip}:9092 --clientappio-api-address {server_ip}:9094 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
-        out = send_keys(pane, supernode_command, session_name)
-        print(out)
+        send_keys(pane, supernode_command, session_name)
 
     #   9. check if all clients (local and remote) have connected
     # while True:
@@ -153,7 +157,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         cmd(["tmux", "select-layout", "tiled"])
         extra_pane = len(local_clients) + 1
         init_cont(server_cont, extra_pane, session_name)
-        out = send_keys(
+        send_keys(
             extra_pane,
             f"flwr run {pyproject_path} --insecure --superlink {server_ip}:9093 --stream",
             session_name,
