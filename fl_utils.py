@@ -103,10 +103,15 @@ def cleanup_container(cont: str):
     lxc_exec(
         cont,
         (
-            "pkill -9 -f flower-supernode 2>/dev/null; "
-            "pkill -9 -f flower-superexec 2>/dev/null; "
-            "pkill -9 -f flower-superlink 2>/dev/null; "
-            "sleep 2; "  # wait for ports to release
+            # 1. Kill ALL flower/flwr processes aggressively
+            "pkill -9 -f 'flower-' 2>/dev/null; "
+            "pkill -9 -f 'flwr ' 2>/dev/null; "
+            # 2. Force free ports 9092 & 9093 (if fuser available)
+            "command -v fuser >/dev/null && fuser -k 9092/tcp 2>/dev/null; "
+            "command -v fuser >/dev/null && fuser -k 9093/tcp 2>/dev/null; "
+            # 3. Wait for kernel to release ports
+            "sleep 3; "
+            # 4. Clear state
             "rm -rf /root/.flwr/apps/ /root/.flwr/superlink/; "
             "echo cleaned"
         ),
@@ -114,16 +119,25 @@ def cleanup_container(cont: str):
 
 
 def start_superlink_tmux(server_cont: str, pane_id: str):
-    """Start SuperLink in a visible tmux pane."""
     print(f"  Starting SuperLink in pane {pane_id}...")
     tmux_run_in_cont(
         pane_id,
         server_cont,
-        # "FLWR_LOG_LEVEL=DEBUG flower-superlink --insecure 2>&1 | tee /tmp/superlink.log",
-        "flower-superlink --insecure 2>&1 | tee /tmp/superlink.log",
+        "FLWR_LOG_LEVEL=DEBUG flower-superlink --insecure 2>&1 | tee /tmp/superlink.log",
     )
     time.sleep(3)
-    # Verify it actually started
+
+    # Check for port error in log
+    log_check = lxc_exec(
+        server_cont,
+        "grep -c 'Port.*already in use' /tmp/superlink.log 2>/dev/null || echo 0",
+    )
+    if int(log_check.strip().split("\n")[-1]) > 0:
+        raise RuntimeError(
+            f"SuperLink failed: Port already in use. Check /tmp/superlink.log on {server_cont}"
+        )
+
+    # Verify process is alive
     check = lxc_exec(server_cont, "pgrep -f flower-superlink && echo UP || echo FAILED")
     if "UP" not in check:
         raise RuntimeError(f"SuperLink failed to start on {server_cont}.")
