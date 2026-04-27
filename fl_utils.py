@@ -42,6 +42,53 @@ def bordered_print(text: str):
     print(f"{'='*len(text)}=\n")
 
 
+def cleanup_flower_state(containers: list, server_cont: str):
+    """Kill stale Flower processes and force-release ports on relevant containers."""
+    targets = list(set(containers + [server_cont]))
+    kill_command = """
+            pkill -9 -f 'flower-superlink' 2>/dev/null || true
+            pkill -9 -f 'flower-supernode' 2>/dev/null || true
+            pkill -9 -f 'flwr ' 2>/dev/null || true
+            pkill -9 -f 'ray::' 2>/dev/null || true
+            sleep 1
+        """
+    for cont in targets:
+        # 1. Kill all known Flower/FLWR processes
+
+        cmd(f" lxc exec {cont} -- bash -c '{kill_command}'")
+
+        # 2. Force-kill anything still holding our ports
+        for port in [9092, 9093, 9094]:
+            cmd(
+                f"lxc exec {cont} -- bash -c 'pid=$(ss -tlnp 2>/dev/null | grep ':{port} ' | grep -oP 'pid=\\K[0-9]+' | head -1)[ -n '$pid' ] && kill -9 '$pid' 2>/dev/null || true'",
+                shell=True,
+            )
+
+        # 3. Let kernel release sockets
+        time.sleep(2)
+        print(f" Cleaned {cont}")
+
+
+def wait_for_ports_free(cont: str, ports: list[int], timeout: int = 10) -> bool:
+    """Block until all specified ports are free on the container."""
+    start = time.time()
+    while time.time() - start < timeout:
+        busy = []
+        for port in ports:
+            res = cmd(
+                f"lxc exec {cont} -- bash -c 'ss -tlnp | grep ':{port} ' || echo FREE'",
+                shell=True,
+            )
+            if "FREE" not in res:
+                busy.append(port)
+        if not busy:
+            return True
+        time.sleep(0.5)
+    raise RuntimeError(
+        f"Ports {busy} still in use on {cont} after {timeout}s. Manual cleanup required."
+    )
+
+
 def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
     """
     create tmux session and panes for each client/server process. Start flwr application.
@@ -79,6 +126,12 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     #     return
 
     # Process steps:
+
+    # ── 0. CLEAN & VERIFY (CRITICAL) ──────────────────────────────────────────
+    bordered_print("Cleaning stale Flower state")
+    cleanup_flower_state(containers, server_cont)
+    wait_for_ports_free(server_cont, [9092, 9093, 9094], timeout=10)
+
     #   1. separate local and remote containers
     all_local_conts = get_container_names()
     local_clients = [cont for cont in containers if cont in all_local_conts]
