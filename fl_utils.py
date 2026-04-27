@@ -55,7 +55,7 @@ def cleanup_flower_state(containers: list, server_cont: str):
     for cont in targets:
         # 1. Kill all known Flower/FLWR processes
 
-        cmd(f" lxc exec {cont} -- bash -c '{kill_command}'")
+        cmd(f" lxc exec {cont} -- bash -c '{kill_command}'", shell=True)
 
         # 2. Force-kill anything still holding our ports
         for port in [9092, 9093, 9094]:
