@@ -410,12 +410,12 @@ def start_fed_training(
             time.sleep(0.5)
 
     # ── 5. Start remote SuperNodes in background ──────────────────────────────
-    if my_remote_clients:
-        print(f"\n=== Starting remote SuperNodes (background) ===")
-        for cont in my_remote_clients:
-            start_supernode_background(
-                cont, server_ip, partition_map[cont], num_partitions
-            )
+    # if my_remote_clients:
+    #     print(f"\n=== Starting remote SuperNodes (background) ===")
+    #     for cont in my_remote_clients:
+    #         start_supernode_background(
+    #             cont, server_ip, partition_map[cont], num_partitions
+    #         )
 
     # ── 6. Server host: wait then run ─────────────────────────────────────────
     if is_server_host:
