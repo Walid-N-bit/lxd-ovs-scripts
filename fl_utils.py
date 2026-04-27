@@ -121,7 +121,10 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     bordered_print("Initializing containers venvs")
     for cont in clients_info:
         pane = clients_info.get(cont).get("pane")
-        init_cont(cont, pane, session_name)
+        try:
+            init_cont(cont, pane, session_name)
+        except Exception as e:
+            print(f"ERROR: {e}")
         print(f"{cont} done")
 
     #   4. launch superlink if server is local
