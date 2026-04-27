@@ -212,7 +212,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         init_cont(server_cont, extra_pane, session_name)
         send_keys(
             extra_pane,
-            f"flwr run {pyproject_path} --superlink {server_ip}:9093 --stream",
+            f"flwr run {pyproject_path} --stream",
             session_name,
         )
 
