@@ -110,12 +110,13 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         """
 
         cont_commands = [
-            f"lxc shell {container}",
-            "cd fl_app",
+            f"lxc exec {container} -- bash",
+            "cd /root/fl_app",
             "source venv/bin/activate",
         ]
         for c in cont_commands:
             send_keys(pane, c, session)
+            time.sleep(1.5)
 
     # shelved for later
     # def check_supernodes_connect() -> bool:
@@ -197,7 +198,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     for cont in clients_info:
         sn_id = clients_info.get(cont).get("supernode-id")
         pane = clients_info.get(cont).get("pane")
-        supernode_command = f"flower-supernode --insecure --superlink {server_ip}:9092 --clientappio-api-address {server_ip}:9094 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
+        supernode_command = f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
         send_keys(pane, supernode_command, session_name)
 
     #   9. check if all clients (local and remote) have connected
