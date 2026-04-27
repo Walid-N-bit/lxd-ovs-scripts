@@ -28,8 +28,8 @@ def send_keys(pane: int, keys: str, session: str = ""):
     :return: tmux command output
     :rtype: list[str]
     """
-    o1 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", keys], shell=True)
-    o2 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", "C-m"], shell=True)
+    o1 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", keys])
+    o2 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", "C-m"])
     return o1, o2
 
 
