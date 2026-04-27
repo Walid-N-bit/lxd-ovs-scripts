@@ -115,10 +115,14 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         for i, cont in enumerate(local_clients, 1):
             cmd(["tmux", "split-window", "-t", session_name, "-h"])
             clients_info[cont].update({"pane": i})
+            print(f"{cont} done")
+
     else:
         for i, cont in enumerate(local_clients):
             cmd(["tmux", "split-window", "-t", session_name, "-h"])
             clients_info[cont].update({"pane": i})
+            print(f"{cont} done")
+
     cmd(["tmux", "select-layout", "tiled"])
 
     #   6. initiate clients env
