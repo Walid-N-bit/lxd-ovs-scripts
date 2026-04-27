@@ -14,6 +14,7 @@ PARTITIONING = "compressed_images_wheat/data_partition.json"
 DATA_DIR = "compressed_images_wheat"
 
 import subprocess
+import time
 import json
 from typing import Optional
 
@@ -25,8 +26,7 @@ def new_cmd(command: list | str) -> str:
     return result.stdout + result.stderr
 
 
-def get_container_names() -> list[str]:
-    """Return names of containers on the local LXD host."""
+def get_local_containers() -> list[str]:
     result = subprocess.run(
         ["lxc", "list", "--format", "json"], capture_output=True, text=True
     )
@@ -34,250 +34,237 @@ def get_container_names() -> list[str]:
     return [c["name"] for c in containers if c["status"] == "Running"]
 
 
-def get_host_id(prefix: str, cont_name: str) -> str:
-    """Extract numeric ID from container name e.g. cont-140 → 140."""
-    return cont_name.split("-")[-1]
-
-
 def is_local_cont(cont: str) -> bool:
-    return cont in get_container_names()
+    return cont in get_local_containers()
+
+
+def lxc_exec(cont: str, bash_cmd: str) -> str:
+    """Run a bash command inside a local container."""
+    result = subprocess.run(
+        ["lxc", "exec", cont, "--", "bash", "-c", bash_cmd],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout + result.stderr
 
 
 def get_server_ip(server_cont: str) -> str:
-    host_id = get_host_id("vm", server_cont)
+    host_id = server_cont.split("-")[-1]
     return f"10.0.200.{host_id}"
 
 
 def cleanup_container(cont: str):
-    """Kill stale flower processes and clear FAB cache."""
     print(f"  Cleaning {cont}...")
-    lxc_target = cont if is_local_cont(cont) else f"remote:{cont}"
-    new_cmd(
-        [
-            "lxc",
-            "exec",
-            lxc_target,
-            "--",
-            "bash",
-            "-c",
+    lxc_exec(
+        cont,
+        (
             "pkill -f flower-supernode 2>/dev/null; "
             "pkill -f flower-superexec 2>/dev/null; "
             "pkill -f flower-superlink 2>/dev/null; "
-            "rm -rf /root/.flwr/apps/ "
-            "/root/.flwr/superlink/ "  # remove if accidentally created
-            "; echo done",
-        ]
+            "rm -rf /root/.flwr/apps/ /root/.flwr/superlink/; "
+            "echo cleaned"
+        ),
     )
+
+
+def start_superlink(server_cont: str):
+    print(f"Starting SuperLink on {server_cont}...")
+    lxc_exec(
+        server_cont,
+        (
+            "cd fl_app && source venv/bin/activate && "
+            "nohup flower-superlink --insecure "
+            "> /tmp/superlink.log 2>&1 &"
+        ),
+    )
+    time.sleep(3)
+    check = lxc_exec(server_cont, "pgrep -f flower-superlink && echo UP || echo FAILED")
+    if "UP" not in check:
+        raise RuntimeError(f"SuperLink failed to start on {server_cont}.")
+    print(f"SuperLink running.")
 
 
 def start_supernode(cont: str, server_ip: str, partition_id: int, num_partitions: int):
-    """
-    Start a supernode on any container — local or remote — using lxc exec.
-    This is reliable regardless of which host machine runs this script.
-    """
-    lxc_target = cont if is_local_cont(cont) else f"remote:{cont}"
-
-    # Build the supernode command
-    supernode_cmd = (
-        f"cd fl_app && source venv/bin/activate && "
-        f"nohup flower-supernode "
-        f"--insecure "
-        f"--superlink {server_ip}:9092 "
-        f"--node-config 'partition-id={partition_id} num-partitions={num_partitions}' "
-        f"> /tmp/supernode_{cont}.log 2>&1 &"
+    print(f"  {cont} → partition-id={partition_id}")
+    lxc_exec(
+        cont,
+        (
+            f"cd fl_app && source venv/bin/activate && "
+            f"nohup flower-supernode "
+            f"--insecure "
+            f"--superlink {server_ip}:9092 "
+            f"--node-config 'partition-id={partition_id} num-partitions={num_partitions}' "
+            f"> /tmp/supernode_{cont}.log 2>&1 &"
+        ),
     )
 
-    result = new_cmd(["lxc", "exec", lxc_target, "--", "bash", "-c", supernode_cmd])
-    print(f"  Started supernode on {cont} (partition {partition_id}/{num_partitions})")
-    return result
 
-
-def wait_for_nodes(server_cont: str, expected: int, timeout: int = 120) -> bool:
-    """
-    Poll SuperLink log until all expected nodes have activated.
-    Returns True if all nodes ready, False if timeout.
-    """
-    print(f"\nWaiting for {expected} nodes to connect (timeout={timeout}s)...")
+def wait_for_nodes(server_cont: str, expected: int, timeout: int = 180) -> bool:
+    """Poll SuperLink log until all expected nodes activate."""
+    print(f"\nWaiting for {expected} nodes (timeout={timeout}s)...")
     start = time.time()
-
+    count = 0
     while time.time() - start < timeout:
-        result = new_cmd(
-            [
-                "lxc",
-                "exec",
-                server_cont,
-                "--",
-                "bash",
-                "-c",
-                "grep -c 'ActivateNode' /tmp/superlink.log 2>/dev/null || echo 0",
-            ]
+        result = lxc_exec(
+            server_cont,
+            "grep -c 'ActivateNode' /tmp/superlink.log 2>/dev/null || echo 0",
         )
         try:
             count = int(result.strip().split("\n")[-1])
         except ValueError:
             count = 0
-
         elapsed = int(time.time() - start)
-        print(f"  [{elapsed}s] Nodes activated: {count}/{expected}", end="\r")
-
+        print(f"  [{elapsed}s] {count}/{expected} nodes activated", end="\r")
         if count >= expected:
-            print(f"\n  All {expected} nodes connected after {elapsed}s.")
+            print(f"\n  All {expected} nodes ready after {elapsed}s.")
             return True
         time.sleep(5)
-
-    print(f"\n  TIMEOUT: Only {count}/{expected} nodes connected after {timeout}s.")
+    print(f"\n  TIMEOUT: only {count}/{expected} nodes connected.")
     return False
 
 
-def get_node_logs(containers: list, server_cont: str):
-    """Print supernode logs for debugging after a failed round."""
-    print("\n=== Node Status Report ===")
-    for cont in containers:
-        if cont == server_cont:
-            continue
-        lxc_target = cont if is_local_cont(cont) else f"remote:{cont}"
+def collect_logs(local_clients: list):
+    print("\n=== Supernode Logs ===")
+    for cont in local_clients:
         print(f"\n--- {cont} ---")
-        result = cmd(
-            [
-                "lxc",
-                "exec",
-                lxc_target,
-                "--",
-                "bash",
-                "-c",
-                f"tail -20 /tmp/supernode_{cont}.log 2>/dev/null || echo 'no log found'",
-            ]
+        print(
+            lxc_exec(
+                cont, f"tail -20 /tmp/supernode_{cont}.log 2>/dev/null || echo 'no log'"
+            )
         )
-        print(result)
 
 
 def start_fed_training(
-    containers: list,
-    server_cont: str,
+    containers: list,  # ALL containers across both hosts
+    server_cont: str,  # must be local to the host running flwr run
     pyproject_path: str = ".",
-    lxc_remote_name: str = "remote",  # name of remote LXD remote, set via `lxc remote add`
-    node_ready_timeout: int = 120,
+    node_ready_timeout: int = 180,
+    role: str = "auto",  # "server_host" | "client_host" | "auto"
 ):
     """
-    Robust federated learning launcher.
+    Two-host federated learning launcher.
 
-    Works correctly across two LXD hosts. Uses lxc exec for all container
-    operations instead of tmux shell, ensuring remote containers are started.
+    Run this function on BOTH hosts with identical arguments.
+    Each instance automatically handles only its local containers.
+
+    The host that owns server_cont also runs `flwr run`.
+    Partition IDs are assigned from the globally sorted list so both
+    hosts always agree on the assignment.
 
     Args:
-        containers:          All participating containers (local + remote)
-        server_cont:         Name of the SuperLink container
-        pyproject_path:      Path to pass to `flwr run`
-        lxc_remote_name:     Name of the remote LXD host as configured in `lxc remote`
-        node_ready_timeout:  Seconds to wait for all nodes before aborting
+        containers:          Complete list of ALL containers (both hosts)
+        server_cont:         SuperLink container name
+        pyproject_path:      Path for flwr run
+        node_ready_timeout:  Seconds to wait before giving up
+        role:                Force role or let it auto-detect
     """
 
-    containers = sorted(containers)
-    clients = [c for c in containers if c != server_cont]
+    # ── Derive stable partition assignments from full sorted list ─────────────
+    # Both host instances receive identical container list and sort it the same
+    # way, so partition IDs are always consistent regardless of which host runs.
+    all_containers = sorted(containers)
+    clients = [c for c in all_containers if c != server_cont]
     num_partitions = len(clients)
+    partition_map = {cont: i for i, cont in enumerate(clients)}
     server_ip = get_server_ip(server_cont)
 
-    print(f"Server:      {server_cont} ({server_ip})")
-    print(f"Clients:     {clients}")
-    print(f"Partitions:  {num_partitions}")
-    print(f"Remote name: {lxc_remote_name}\n")
+    # ── Determine this host's role ────────────────────────────────────────────
+    local_conts = get_local_containers()
+    is_server_host = server_cont in local_conts
+    my_clients = [c for c in clients if c in local_conts]
 
-    # ── Step 1: Clean all containers ─────────────────────────────────────────
-    print("=== Cleaning stale state ===")
-    all_targets = [server_cont] + clients
-    for cont in all_targets:
+    print(f"{'='*50}")
+    print(f"Role:        {'SERVER HOST' if is_server_host else 'CLIENT HOST'}")
+    print(f"Server:      {server_cont} ({server_ip})")
+    print(f"All clients: {clients}")
+    print(f"My clients:  {my_clients}")
+    print(f"Partitions:  { {c: partition_map[c] for c in my_clients} }")
+    print(f"{'='*50}\n")
+
+    # ── Clean local containers ────────────────────────────────────────────────
+    print("=== Cleaning local containers ===")
+    clean_targets = ([server_cont] if is_server_host else []) + my_clients
+    for cont in clean_targets:
         cleanup_container(cont)
 
-    # ── Step 2: Start SuperLink ───────────────────────────────────────────────
-    print(f"\n=== Starting SuperLink on {server_cont} ===")
-    if not is_local_cont(server_cont):
-        raise RuntimeError(
-            f"Server container '{server_cont}' must be local to the machine "
-            f"running flwr run. Run this script from the host that owns {server_cont}."
+    # ── Server host: start SuperLink ─────────────────────────────────────────
+    if is_server_host:
+        print(f"\n=== Starting SuperLink ===")
+        start_superlink(server_cont)
+
+    # ── All hosts: start local SuperNodes ────────────────────────────────────
+    if my_clients:
+        print(f"\n=== Starting local SuperNodes ===")
+        for cont in my_clients:
+            start_supernode(cont, server_ip, partition_map[cont], num_partitions)
+    else:
+        print("No local client containers to start.")
+
+    # ── Server host: wait for ALL nodes, then run ─────────────────────────────
+    if is_server_host:
+        all_ready = wait_for_nodes(server_cont, num_partitions, node_ready_timeout)
+
+        if not all_ready:
+            collect_logs(my_clients)
+            raise RuntimeError(
+                f"Not all nodes connected. "
+                f"Check that the client host has also called start_fed_training()."
+            )
+
+        print(f"\n=== Starting flwr run ===")
+        lxc_exec(
+            server_cont,
+            (
+                f"cd fl_app && source venv/bin/activate && "
+                f"flwr run {pyproject_path} local-deployment --stream "
+                f"> /tmp/flwr_run.log 2>&1 &"
+            ),
         )
 
-    new_cmd(
-        [
-            "lxc",
-            "exec",
-            server_cont,
-            "--",
-            "bash",
-            "-c",
-            "cd fl_app && source venv/bin/activate && "
-            "nohup flower-superlink --insecure "
-            "> /tmp/superlink.log 2>&1 &",
-        ]
-    )
-    time.sleep(3)
+        print("Streaming log (Ctrl+C to detach):")
+        print("-" * 60)
+        try:
+            proc = subprocess.Popen(
+                [
+                    "lxc",
+                    "exec",
+                    server_cont,
+                    "--",
+                    "bash",
+                    "-c",
+                    "tail -f /tmp/flwr_run.log",
+                ],
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            for line in proc.stdout:
+                print(line, end="")
+        except KeyboardInterrupt:
+            print(
+                f"\nDetached. Monitor: lxc exec {server_cont} -- tail -f /tmp/flwr_run.log"
+            )
 
-    # Verify SuperLink is up
-    check = new_cmd(
-        [
-            "lxc",
-            "exec",
-            server_cont,
-            "--",
-            "bash",
-            "-c",
-            "pgrep -f flower-superlink && echo UP || echo FAILED",
-        ]
-    )
-    if "FAILED" in check:
-        raise RuntimeError("SuperLink failed to start. Check /tmp/superlink.log")
-    print(f"SuperLink running on {server_ip}:9092")
-
-    # ── Step 3: Start all SuperNodes ─────────────────────────────────────────
-    print(f"\n=== Starting {num_partitions} SuperNodes ===")
-    for i, cont in enumerate(clients):
-        start_supernode(cont, server_ip, i, num_partitions)
-
-    # ── Step 4: Wait for all nodes to connect ────────────────────────────────
-    all_connected = wait_for_nodes(server_cont, num_partitions, node_ready_timeout)
-
-    if not all_connected:
-        print("\nNot all nodes connected. Collecting logs for diagnosis...")
-        get_node_logs(clients, server_cont)
-        raise RuntimeError(f"Aborting: not all nodes connected. " f"Check logs above.")
-
-    # ── Step 5: Launch training ───────────────────────────────────────────────
-    print(f"\n=== Starting federated run ===")
-    new_cmd(
-        [
-            "lxc",
-            "exec",
-            server_cont,
-            "--",
-            "bash",
-            "-c",
-            f"cd fl_app && source venv/bin/activate && "
-            f"flwr run {pyproject_path} local-deployment --stream "
-            f">> /tmp/flwr_run.log 2>&1 &",
-        ]
-    )
-
-    print(f"Training started. Streaming logs from {server_cont}:")
-    print("-" * 60)
-
-    # Stream the run log
-    try:
-        proc = subprocess.Popen(
-            [
-                "lxc",
-                "exec",
-                server_cont,
-                "--",
-                "bash",
-                "-c",
-                "tail -f /tmp/flwr_run.log",
-            ],
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-        for line in proc.stdout:
-            print(line, end="")
-    except KeyboardInterrupt:
-        print("\nLog streaming stopped (training continues in background).")
+    else:
+        # Client host just waits so the process doesn't exit
+        print(f"\nClient host ready. Waiting for training to complete...")
+        print("(Ctrl+C to stop supernodes on this host)")
+        try:
+            while True:
+                time.sleep(30)
+                # Optionally print local supernode status
+                for cont in my_clients:
+                    alive = lxc_exec(
+                        cont, "pgrep -f flower-supernode && echo alive || echo dead"
+                    )
+                    if "dead" in alive:
+                        print(f"WARNING: supernode on {cont} has died, restarting...")
+                        start_supernode(
+                            cont, server_ip, partition_map[cont], num_partitions
+                        )
+        except KeyboardInterrupt:
+            print("\nStopping local supernodes...")
+            for cont in my_clients:
+                lxc_exec(cont, "pkill -f flower-supernode 2>/dev/null")
 
 
 # def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
