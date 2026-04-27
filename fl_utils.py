@@ -42,51 +42,47 @@ def bordered_print(text: str):
     print(f"{'='*len(text)}=\n")
 
 
-def cleanup_flower_state(containers: list, server_cont: str):
-    """Kill stale Flower processes and force-release ports on relevant containers."""
-    targets = list(set(containers + [server_cont]))
-    kill_command = """
-            pkill -9 -f 'flower-superlink' 2>/dev/null || true
-            pkill -9 -f 'flower-supernode' 2>/dev/null || true
-            pkill -9 -f 'flwr ' 2>/dev/null || true
-            pkill -9 -f 'ray::' 2>/dev/null || true
-            sleep 1
-        """
-    for cont in targets:
-        # 1. Kill all known Flower/FLWR processes
-
-        cmd(f" lxc exec {cont} -- bash -c '{kill_command}'", shell=True)
-
-        # 2. Force-kill anything still holding our ports
-        for port in [9092, 9093, 9094]:
-            cmd(
-                f"lxc exec {cont} -- bash -c 'pid=$(ss -tlnp 2>/dev/null | grep ':{port} ' | grep -oP 'pid=\\K[0-9]+' | head -1)[ -n '$pid' ] && kill -9 '$pid' 2>/dev/null || true'",
-                shell=True,
-            )
-
-        # 3. Let kernel release sockets
-        time.sleep(2)
-        print(f" Cleaned {cont}")
-
-
 def wait_for_ports_free(cont: str, ports: list[int], timeout: int = 10) -> bool:
-    """Block until all specified ports are free on the container."""
+    """Block until all specified ports are free. Zero shell quoting needed."""
     start = time.time()
     while time.time() - start < timeout:
         busy = []
+        # Run ss once and parse in Python (avoids grep quote hell)
+        res = cmd(f"lxc exec {cont} -- ss -tlnp", shell=True)
         for port in ports:
-            res = cmd(
-                f"lxc exec {cont} -- bash -c 'ss -tlnp | grep ':{port} ' || echo FREE'",
-                shell=True,
-            )
-            if "FREE" not in res:
+            # Match exactly ":9092 " to avoid false positives like :90920
+            if f":{port} " in res:
                 busy.append(port)
         if not busy:
             return True
         time.sleep(0.5)
-    raise RuntimeError(
-        f"Ports {busy} still in use on {cont} after {timeout}s. Manual cleanup required."
-    )
+    raise RuntimeError(f"Ports {busy} still in use on {cont} after {timeout}s.")
+
+
+def cleanup_flower_state(containers: list, server_cont: str):
+    """Kill stale Flower processes and force-release ports."""
+    targets = list(set(containers + [server_cont]))
+    for cont in targets:
+        # 1. Kill processes (double quotes outer, single quotes inner)
+        cmd(
+            f"lxc exec {cont} -- bash -c \"pkill -9 -f 'flower-' 2>/dev/null || true; "
+            f"pkill -9 -f 'flwr ' 2>/dev/null || true; "
+            f"pkill -9 -f 'ray::' 2>/dev/null || true; sleep 1\"",
+            shell=True,
+        )
+
+        # 2. Force-kill by port (properly escaped)
+        for port in [9092, 9093, 9094]:
+            kill_cmd = (
+                f"lxc exec {cont} -- bash -c "
+                f"\"pid=$(ss -tlnp 2>/dev/null | grep ':{port} ' | grep -oP 'pid=\\\\K[0-9]+' | head -1); "
+                f'[ -n \\"$pid\\" ] && kill -9 \\"$pid\\" 2>/dev/null || true"'
+            )
+            cmd(kill_cmd, shell=True)
+
+        # 3. Let kernel release sockets
+        time.sleep(2)
+        print(f"  Cleaned {cont}")
 
 
 def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
