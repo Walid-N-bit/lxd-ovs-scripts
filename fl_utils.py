@@ -98,24 +98,71 @@ def tmux_tile():
 # ── Core operations ───────────────────────────────────────────────────────────
 
 
+# def cleanup_container(cont: str):
+#     print(f"  Cleaning {cont}...")
+#     lxc_exec(
+#         cont,
+#         (
+#             # 1. Kill ALL flower/flwr processes aggressively
+#             "pkill -9 -f 'flower-' 2>/dev/null; "
+#             "pkill -9 -f 'flwr ' 2>/dev/null; "
+#             # 2. Force free ports 9092 & 9093 (if fuser available)
+#             "command -v fuser >/dev/null && fuser -k 9092/tcp 2>/dev/null; "
+#             "command -v fuser >/dev/null && fuser -k 9093/tcp 2>/dev/null; "
+#             # 3. Wait for kernel to release ports
+#             "sleep 3; "
+#             # 4. Clear state
+#             "rm -rf /root/.flwr/apps/ /root/.flwr/superlink/; "
+#             "echo cleaned"
+#         ),
+#     )
 def cleanup_container(cont: str):
     print(f"  Cleaning {cont}...")
+
+    # 1. Find PIDs holding ports 9092/9093 FIRST (before killing)
+    port_pids = (
+        lxc_exec(
+            cont,
+            """
+        for port in 9092 9093; do
+            pid=$(ss -tlnp 2>/dev/null | grep ":$port " | grep -oP 'pid=\K[0-9]+' | head -1)
+            [ -n "$pid" ] && echo "$pid"
+        done
+    """,
+        )
+        .strip()
+        .split("\n")
+    )
+    port_pids = [p for p in port_pids if p]  # filter empty
+
+    # 2. Kill ALL flower/flwr related processes by pattern
     lxc_exec(
         cont,
-        (
-            # 1. Kill ALL flower/flwr processes aggressively
-            "pkill -9 -f 'flower-' 2>/dev/null; "
-            "pkill -9 -f 'flwr ' 2>/dev/null; "
-            # 2. Force free ports 9092 & 9093 (if fuser available)
-            "command -v fuser >/dev/null && fuser -k 9092/tcp 2>/dev/null; "
-            "command -v fuser >/dev/null && fuser -k 9093/tcp 2>/dev/null; "
-            # 3. Wait for kernel to release ports
-            "sleep 3; "
-            # 4. Clear state
-            "rm -rf /root/.flwr/apps/ /root/.flwr/superlink/; "
-            "echo cleaned"
-        ),
+        """
+        pkill -9 -f 'flower-' 2>/dev/null
+        pkill -9 -f 'flwr ' 2>/dev/null
+        pkill -9 -f 'ray::' 2>/dev/null
+        sleep 1
+    """,
     )
+
+    # 3. Force-kill any PIDs that were holding our ports (in case patterns missed)
+    for pid in port_pids:
+        lxc_exec(cont, f"kill -9 {pid} 2>/dev/null || true")
+
+    # 4. Wait for kernel to release sockets (longer for safety)
+    lxc_exec(cont, "sleep 5")
+
+    # 5. Verify ports are actually free
+    still_busy = lxc_exec(
+        cont, "ss -tlnp | grep -E ':(9092|9093) ' || echo FREE"
+    ).strip()
+    if "FREE" not in still_busy:
+        print(f"  Warning: Ports still busy after cleanup:\n{still_busy}")
+
+    # 6. Clear Flower state
+    lxc_exec(cont, "rm -rf /root/.flwr/apps/ /root/.flwr/superlink/ 2>/dev/null")
+    print(f"  {cont} cleaned.")
 
 
 def start_superlink_tmux(server_cont: str, pane_id: str):
