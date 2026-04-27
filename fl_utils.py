@@ -362,7 +362,7 @@ def start_fed_training(
 
     # Track pane IDs — first pane already exists after new-session
     result = subprocess.run(
-        ["tmux", "list-panes", "-t", SESSION, "-F", "#{pane_id}"],
+        ["tmux", "list-panes", "-t", SESSION, "-F", f"#{pane_id}"],
         capture_output=True,
         text=True,
     )
