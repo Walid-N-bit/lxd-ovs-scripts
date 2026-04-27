@@ -175,6 +175,8 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         local_clients.remove(server_cont)
     remote_clients = [cont for cont in containers if cont not in all_local_conts]
     all_clients = sorted(local_clients + remote_clients)
+    if server_cont in all_clients:
+        all_clients.remove(server_cont)
     clients_info = {
         cont: {"supernode-id": i, "pane": 0} for i, cont in enumerate(all_clients)
     }
