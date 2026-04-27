@@ -33,6 +33,12 @@ def send_keys(pane: int, keys: str, session: str = ""):
     )
 
 
+def bordered_print(text: str):
+    print(f"\n{'='*len(text)}=")
+    print(f" {text}")
+    print(f"{'='*len(text)}=\n")
+
+
 def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
     """
     create tmux session and panes for each client/server process. Start flwr application.
@@ -89,7 +95,10 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     id = server_cont.split("-")[-1]
     server_ip = f"10.0.200.{id}"
 
+    print(f"\n{server_ip = }\n")
+
     #   4. create tmux session
+    bordered_print("starting new session")
     session_name = "fl_session"
     cmd(["tmux", "-d", "-s", session_name])
 
@@ -97,6 +106,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     #       (two for server, one for each client)
 
     # pair of client and their pane in th session (server gets 0)
+    bordered_print("Creating panes")
     if is_server_local:
         for i, cont in enumerate(local_clients, 1):
             cmd(["tmux", "split-window", "-t", session_name, "-h"])
@@ -108,17 +118,21 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     cmd(["tmux", "select-layout", "tiled"])
 
     #   5. initiate clients env
+    bordered_print("Initializing containers venvs")
     for cont in clients_info:
         pane = clients_info.get(cont).get("pane")
         init_cont(cont, pane, session_name)
+        print(f"{cont} done")
 
     #   4. launch superlink if server is local
+    bordered_print("Starting Server SuperLink")
     superlink_command = "flower-superlink --insecure"
     if is_server_local:
         send_keys(0, superlink_command, session_name)
     time.sleep(3)
 
     #   5. launch supernodes in local containers
+    bordered_print("Starting SuperNodes")
     for cont in clients_info:
         sn_id = clients_info.get(cont).get("supernode-id")
         pane = clients_info.get(cont).get("pane")
