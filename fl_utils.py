@@ -28,9 +28,9 @@ def send_keys(pane: int, keys: str, session: str = ""):
     :return: tmux command output
     :rtype: list[str]
     """
-    return cmd(
-        ["tmux", "send-keys", "-t", f"{session}:0.{pane}", keys, "C-m"], shell=True
-    )
+    o1 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", keys], shell=True)
+    o2 = cmd(["tmux", "send-keys", "-t", f"{session}:0.{pane}", "C-m"], shell=True)
+    return o1, o2
 
 
 def bordered_print(text: str):
@@ -72,9 +72,9 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             out = send_keys(pane, c, session)
             print(out)
 
-    def check_supernodes_connect() -> bool:
-
-        return
+    # shelved for later
+    # def check_supernodes_connect() -> bool:
+    #     return
 
     # Process steps:
     #   1. separate local and remote containers
@@ -102,7 +102,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     session_name = "fl_session"
     cmd(["tmux", "-d", "-s", session_name])
 
-    #   3. create panes in tmux session for local containers
+    #   5. create panes in tmux session for local containers
     #       (two for server, one for each client)
 
     # pair of client and their pane in th session (server gets 0)
@@ -117,7 +117,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             clients_info[cont].update({"pane": i})
     cmd(["tmux", "select-layout", "tiled"])
 
-    #   5. initiate clients env
+    #   6. initiate clients env
     bordered_print("Initializing containers venvs")
     for cont in clients_info:
         pane = clients_info.get(cont).get("pane")
@@ -127,14 +127,14 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             print(f"ERROR: {e}")
         print(f"{cont} done")
 
-    #   4. launch superlink if server is local
+    #   7. launch superlink if server is local
     bordered_print("Starting Server SuperLink")
     superlink_command = "flower-superlink --insecure"
     if is_server_local:
         send_keys(0, superlink_command, session_name)
     time.sleep(3)
 
-    #   5. launch supernodes in local containers
+    #   8. launch supernodes in local containers
     bordered_print("Starting SuperNodes")
     for cont in clients_info:
         sn_id = clients_info.get(cont).get("supernode-id")
@@ -143,11 +143,11 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         out = send_keys(pane, supernode_command, session_name)
         print(out)
 
-    #   6. check if all clients (local and remote) have connected
+    #   9. check if all clients (local and remote) have connected
     # while True:
-
     #     pass
-    #   7. run flwr app
+
+    #   10. run flwr app
     if is_server_local:
         cmd(["tmux", "split-window", "-t", session_name, "-h"])
         cmd(["tmux", "select-layout", "tiled"])
