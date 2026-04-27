@@ -119,7 +119,8 @@ def start_superlink_tmux(server_cont: str, pane_id: str):
     tmux_run_in_cont(
         pane_id,
         server_cont,
-        "FLWR_LOG_LEVEL=DEBUG flower-superlink --insecure 2>&1 | tee /tmp/superlink.log",
+        # "FLWR_LOG_LEVEL=DEBUG flower-superlink --insecure 2>&1 | tee /tmp/superlink.log",
+        "flower-superlink --insecure 2>&1 | tee /tmp/superlink.log",
     )
     time.sleep(3)
     # Verify it actually started
@@ -172,45 +173,68 @@ def start_supernode_background(
     # Start a new detached tmux session inside the container running the supernode
     lxc_exec(
         cont,
-        (f"tmux new-session -d -s supernode " f"-x 200 -y 50 " f"'{supernode_cmd}'"),
+        f'tmux new-session -d -s supernode -x 200 -y 50 "{supernode_cmd}"',
     )
 
 
-# def wait_for_nodes(
-#     server_cont: str, expected: int, has_remote: bool = False, timeout: int = 180
-# ) -> bool:
-#     print(f"\nWaiting for {expected} nodes to connect (timeout={timeout}s)...")
-#     start = time.time()
-#     count = 0
+def wait_for_nodes(
+    server_cont: str, expected: int, has_remote: bool = False, timeout: int = 180
+) -> bool:
+    print(f"\nWaiting for {expected} nodes to connect (timeout={timeout}s)...")
+    start = time.time()
+    count = 0
 
-#     while time.time() - start < timeout:
-#         result = lxc_exec(
-#             server_cont,
-#             "grep -c 'ActivateNode' /tmp/superlink.log 2>/dev/null || echo 0",
-#         )
-#         try:
-#             count = int(result.strip().split("\n")[-1])
-#         except ValueError:
-#             count = 0
+    while time.time() - start < timeout:
+        result = lxc_exec(
+            server_cont,
+            "grep -c 'ActivateNode' /tmp/superlink.log 2>/dev/null || echo 0",
+        )
+        try:
+            count = int(result.strip().split("\n")[-1])
+        except ValueError:
+            count = 0
 
-#         elapsed = int(time.time() - start)
-#         print(f"  [{elapsed}s] {count}/{expected} nodes connected", end="\r")
+        elapsed = int(time.time() - start)
+        print(f"  [{elapsed}s] {count}/{expected} nodes connected", end="\r")
 
-#         if count >= expected:
-#             print(f"\n  All {expected} nodes connected after {elapsed}s.")
-#             if has_remote:
-#                 # Remote nodes need extra time to load venv + ClientApp after connecting
-#                 print(f"  Giving remote nodes 15s to finish loading ClientApp...")
-#                 for i in range(15, 0, -1):
-#                     print(f"  Starting in {i}s...  ", end="\r")
-#                     time.sleep(1)
-#                 print()
-#             return True
+        # if count >= expected:
+        #     print(f"\n  All {expected} nodes connected after {elapsed}s.")
+        #     if has_remote:
+        #         # Remote nodes need extra time to load venv + ClientApp after connecting
+        #         print(f"  Giving remote nodes 15s to finish loading ClientApp...")
+        #         for i in range(15, 0, -1):
+        #             print(f"  Starting in {i}s...  ", end="\r")
+        #             time.sleep(1)
+        #         print()
+        #     return True
+        if count >= expected:
+            print(f"\n  All {expected} nodes connected after {elapsed}s.")
+            if has_remote:
+                print("  Waiting for remote ClientApps to initialize...")
+                for _ in range(30):  # Max 30s wait
+                    log = lxc_exec(
+                        server_cont,
+                        "grep -c 'ClientApp' /tmp/superlink.log 2>/dev/null || echo 0",
+                    )
+                    try:
+                        client_apps_started = int(log.strip().split("\n")[-1])
+                    except ValueError:
+                        client_apps_started = 0
 
-#         time.sleep(5)
+                    if client_apps_started >= expected:
+                        print("  All ClientApps initialized.")
+                        break
+                    time.sleep(1)
+                else:
+                    print(
+                        "  Warning: Timeout waiting for ClientApp init. Proceeding anyway."
+                    )
+            return True
 
-#     print(f"\n  TIMEOUT: only {count}/{expected} nodes connected.")
-#     return False
+        time.sleep(5)
+
+    print(f"\n  TIMEOUT: only {count}/{expected} nodes connected.")
+    return False
 
 
 def collect_logs(clients: list):
@@ -227,155 +251,21 @@ def collect_logs(clients: list):
 # ── Main launcher ─────────────────────────────────────────────────────────────
 
 
-# def start_fed_training(
-#     containers: list,
-#     server_cont: str,
-#     pyproject_path: str = ".",
-#     node_ready_timeout: int = 180,
-# ):
-#     """
-#     Federated learning launcher with tmux visibility for local containers.
-
-#     Run on BOTH hosts with identical arguments.
-#     - Server host: opens tmux panes for all local containers + flwr run pane
-#     - Client host: opens tmux panes for local containers, remote ones run in background
-#     - Partition IDs derived from globally sorted list — consistent across both hosts
-#     """
-
-#     all_containers = sorted(containers)
-#     clients = [c for c in all_containers if c != server_cont]
-#     num_partitions = len(clients)
-#     partition_map = {cont: i for i, cont in enumerate(clients)}
-#     server_ip = get_server_ip(server_cont)
-
-#     local_conts = get_local_containers()
-#     is_server_host = server_cont in local_conts
-#     my_local_clients = [c for c in clients if c in local_conts]
-#     my_remote_clients = [c for c in clients if c not in local_conts]
-
-#     print(f"{'='*55}")
-#     print(f"Role:           {'SERVER HOST' if is_server_host else 'CLIENT HOST'}")
-#     print(f"Server:         {server_cont} ({server_ip})")
-#     print(f"Local clients:  {my_local_clients}")
-#     print(f"Remote clients: {my_remote_clients}")
-#     print(
-#         f"Partition map:  { {c: partition_map[c] for c in my_local_clients + my_remote_clients} }"
-#     )
-#     print(f"{'='*55}\n")
-
-#     # ── 1. Clean ──────────────────────────────────────────────────────────────
-#     print("=== Cleaning stale state ===")
-#     clean_targets = (
-#         ([server_cont] if is_server_host else []) + my_local_clients + my_remote_clients
-#     )
-#     for cont in clean_targets:
-#         cleanup_container(cont)
-
-#     # ── 2. Set up tmux session ────────────────────────────────────────────────
-#     print(f"\n=== Setting up tmux session '{SESSION}' ===")
-#     tmux_new_session()
-
-#     # Track pane IDs — first pane already exists after new-session
-#     result = subprocess.run(
-#         ["tmux", "list-panes", "-t", SESSION, "-F", "#{pane_id}"],
-#         capture_output=True,
-#         text=True,
-#     )
-#     pane_ids = [result.stdout.strip()]  # first pane
-
-#     # Create one pane per local container that needs one
-#     local_conts_needing_pane = (
-#         [server_cont] if is_server_host else []
-#     ) + my_local_clients
-#     # First pane goes to server (or first client if not server host)
-#     # Remaining panes are split
-#     for _ in range(len(local_conts_needing_pane) - 1):
-#         pane_id = tmux_new_pane()
-#         pane_ids.append(pane_id)
-#         time.sleep(0.2)
-
-#     # Add one more pane for flwr run on server host
-#     if is_server_host:
-#         run_pane = tmux_new_pane()
-#         time.sleep(0.2)
-#     else:
-#         run_pane = None
-
-#     tmux_tile()
-#     time.sleep(0.5)
-
-#     # ── 3. Start SuperLink in first pane (server host only) ───────────────────
-#     pane_cursor = 0
-#     if is_server_host:
-#         print(f"\n=== Starting SuperLink ===")
-#         start_superlink_tmux(server_cont, pane_ids[pane_cursor])
-#         pane_cursor += 1
-
-#     # ── 4. Start local SuperNodes in tmux panes ───────────────────────────────
-#     if my_local_clients:
-#         print(f"\n=== Starting local SuperNodes (tmux) ===")
-#         for cont in my_local_clients:
-#             start_supernode_tmux(
-#                 cont,
-#                 server_ip,
-#                 partition_map[cont],
-#                 num_partitions,
-#                 pane_ids[pane_cursor],
-#             )
-#             pane_cursor += 1
-#             time.sleep(0.5)
-
-#     # ── 5. Start remote SuperNodes in background ──────────────────────────────
-#     if my_remote_clients:
-#         print(f"\n=== Starting remote SuperNodes (background) ===")
-#         for cont in my_remote_clients:
-#             start_supernode_background(
-#                 cont, server_ip, partition_map[cont], num_partitions
-#             )
-
-#     # ── 6. Server host: wait then run ─────────────────────────────────────────
-#     if is_server_host:
-#         # all_ready = wait_for_nodes(server_cont, num_partitions, node_ready_timeout)
-#         all_ready = wait_for_nodes(
-#             server_cont,
-#             num_partitions,
-#             has_remote=len(my_remote_clients) > 0,
-#             timeout=node_ready_timeout,
-#         )
-
-#         if not all_ready:
-#             collect_logs(my_local_clients + my_remote_clients)
-#             raise RuntimeError(
-#                 "Not all nodes connected in time. "
-#                 "Ensure the client host has also called start_fed_training()."
-#             )
-
-#         print(f"\n=== Starting flwr run ===")
-#         tmux_run_in_cont(
-#             run_pane,
-#             server_cont,
-#             f"flwr run {pyproject_path} local-deployment --stream 2>&1 | tee /tmp/flwr_run.log",
-#         )
-#         tmux_tile()
-#         print(f"\nTraining started.")
-#         print(f"Attach to tmux session to watch:  tmux attach -t {SESSION}")
-
-#     else:
-#         # Client host: keep supernodes alive, restart if they die
-#         print(f"\nClient host ready.")
-#         print(f"Attach to watch:  tmux attach -t {SESSION}")
-#         for cont in my_local_clients:
-#             print(f"  lxc exec {cont} -- tmux attach -t supernode")
-#         print(f"\nTerminal is free. Training is running.")
-
-
 def start_fed_training(
     containers: list,
     server_cont: str,
     pyproject_path: str = ".",
     node_ready_timeout: int = 180,
-    remote_warmup_seconds: int = 30,  # ← tune this if needed
 ):
+    """
+    Federated learning launcher with tmux visibility for local containers.
+
+    Run on BOTH hosts with identical arguments.
+    - Server host: opens tmux panes for all local containers + flwr run pane
+    - Client host: opens tmux panes for local containers, remote ones run in background
+    - Partition IDs derived from globally sorted list — consistent across both hosts
+    """
+
     all_containers = sorted(containers)
     clients = [c for c in all_containers if c != server_cont]
     num_partitions = len(clients)
@@ -409,21 +299,26 @@ def start_fed_training(
     print(f"\n=== Setting up tmux session '{SESSION}' ===")
     tmux_new_session()
 
+    # Track pane IDs — first pane already exists after new-session
     result = subprocess.run(
         ["tmux", "list-panes", "-t", SESSION, "-F", "#{pane_id}"],
         capture_output=True,
         text=True,
     )
-    pane_ids = [result.stdout.strip()]
+    pane_ids = [result.stdout.strip()]  # first pane
 
+    # Create one pane per local container that needs one
     local_conts_needing_pane = (
         [server_cont] if is_server_host else []
     ) + my_local_clients
+    # First pane goes to server (or first client if not server host)
+    # Remaining panes are split
     for _ in range(len(local_conts_needing_pane) - 1):
         pane_id = tmux_new_pane()
         pane_ids.append(pane_id)
         time.sleep(0.2)
 
+    # Add one more pane for flwr run on server host
     if is_server_host:
         run_pane = tmux_new_pane()
         time.sleep(0.2)
@@ -433,41 +328,16 @@ def start_fed_training(
     tmux_tile()
     time.sleep(0.5)
 
-    # ── 3. CLIENT HOST: start supernodes first and exit ───────────────────────
-    # Client host starts its nodes immediately so they are already connecting
-    # by the time the server host starts SuperLink.
-    if not is_server_host:
-        print(f"\n=== Starting local SuperNodes (client host) ===")
-        pane_cursor = 0
-        for cont in my_local_clients:
-            start_supernode_tmux(
-                cont,
-                server_ip,
-                partition_map[cont],
-                num_partitions,
-                pane_ids[pane_cursor],
-            )
-            pane_cursor += 1
-            time.sleep(0.5)
-
-        print(f"\nClient host ready — supernodes connecting to {server_ip}:9092")
-        print(f"Start the server host launcher now if not already running.")
-        print(f"Attach to watch:  tmux attach -t {SESSION}")
-        for cont in my_local_clients:
-            print(f"  or: lxc exec {cont} -- tmux attach -t supernode")
-        return  # ← terminal free immediately
-
-    # ── 4. SERVER HOST: start SuperLink ──────────────────────────────────────
-    # Server host starts SuperLink AFTER client host nodes are already trying
-    # to connect, minimizing the connection delay gap.
+    # ── 3. Start SuperLink in first pane (server host only) ───────────────────
     pane_cursor = 0
-    print(f"\n=== Starting SuperLink ===")
-    start_superlink_tmux(server_cont, pane_ids[pane_cursor])
-    pane_cursor += 1
+    if is_server_host:
+        print(f"\n=== Starting SuperLink ===")
+        start_superlink_tmux(server_cont, pane_ids[pane_cursor])
+        pane_cursor += 1
 
-    # ── 5. SERVER HOST: start its own local supernodes ────────────────────────
+    # ── 4. Start local SuperNodes in tmux panes ───────────────────────────────
     if my_local_clients:
-        print(f"\n=== Starting local SuperNodes (server host) ===")
+        print(f"\n=== Starting local SuperNodes (tmux) ===")
         for cont in my_local_clients:
             start_supernode_tmux(
                 cont,
@@ -479,7 +349,7 @@ def start_fed_training(
             pane_cursor += 1
             time.sleep(0.5)
 
-    # ── 6. Start any remote supernodes this host is responsible for ───────────
+    # ── 5. Start remote SuperNodes in background ──────────────────────────────
     if my_remote_clients:
         print(f"\n=== Starting remote SuperNodes (background) ===")
         for cont in my_remote_clients:
@@ -487,76 +357,41 @@ def start_fed_training(
                 cont, server_ip, partition_map[cont], num_partitions
             )
 
-    # ── 7. Wait for all nodes ─────────────────────────────────────────────────
-    all_ready = wait_for_nodes(
-        server_cont,
-        num_partitions,
-        has_remote=len(my_remote_clients) > 0,
-        timeout=node_ready_timeout,
-        remote_warmup_seconds=remote_warmup_seconds,
-    )
-
-    if not all_ready:
-        collect_logs(my_local_clients + my_remote_clients)
-        raise RuntimeError(
-            "Not all nodes connected in time. "
-            "Ensure the client host has also called start_fed_training()."
-        )
-
-    # ── 8. Fire flwr run ──────────────────────────────────────────────────────
-    print(f"\n=== Starting flwr run ===")
-    tmux_run_in_cont(
-        run_pane,
-        server_cont,
-        f"flwr run {pyproject_path} local-deployment --stream "
-        f"2>&1 | tee /tmp/flwr_run.log",
-    )
-    tmux_tile()
-    print(f"\nTraining started.")
-    print(f"Attach to tmux session to watch:  tmux attach -t {SESSION}")
-
-
-def wait_for_nodes(
-    server_cont: str,
-    expected: int,
-    has_remote: bool = False,
-    timeout: int = 180,
-    remote_warmup_seconds: int = 30,
-) -> bool:
-    print(f"\nWaiting for {expected} nodes to connect (timeout={timeout}s)...")
-    start = time.time()
-    count = 0
-
-    while time.time() - start < timeout:
-        result = lxc_exec(
+    # ── 6. Server host: wait then run ─────────────────────────────────────────
+    if is_server_host:
+        # all_ready = wait_for_nodes(server_cont, num_partitions, node_ready_timeout)
+        all_ready = wait_for_nodes(
             server_cont,
-            "grep -c 'ActivateNode' /tmp/superlink.log 2>/dev/null || echo 0",
+            num_partitions,
+            has_remote=len(my_remote_clients) > 0,
+            timeout=node_ready_timeout,
         )
-        try:
-            count = int(result.strip().split("\n")[-1])
-        except ValueError:
-            count = 0
 
-        elapsed = int(time.time() - start)
-        print(f"  [{elapsed}s] {count}/{expected} nodes connected", end="\r")
+        if not all_ready:
+            collect_logs(my_local_clients + my_remote_clients)
+            raise RuntimeError(
+                "Not all nodes connected in time. "
+                "Ensure the client host has also called start_fed_training()."
+            )
 
-        if count >= expected:
-            print(f"\n  All {expected} nodes connected after {elapsed}s.")
-            if has_remote:
-                print(
-                    f"  Giving remote nodes {remote_warmup_seconds}s "
-                    f"to finish loading ClientApp..."
-                )
-                for i in range(remote_warmup_seconds, 0, -1):
-                    print(f"  Starting in {i}s...  ", end="\r")
-                    time.sleep(1)
-                print()
-            return True
+        print(f"\n=== Starting flwr run ===")
+        tmux_run_in_cont(
+            run_pane,
+            server_cont,
+            # f"flwr run {pyproject_path} local-deployment --stream 2>&1 | tee /tmp/flwr_run.log",
+            f"cd /root/fl_app && flwr run {pyproject_path} --stream 2>&1 | tee /tmp/flwr_run.log",
+        )
+        tmux_tile()
+        print(f"\nTraining started.")
+        print(f"Attach to tmux session to watch:  tmux attach -t {SESSION}")
 
-        time.sleep(5)
-
-    print(f"\n  TIMEOUT: only {count}/{expected} nodes connected.")
-    return False
+    else:
+        # Client host: keep supernodes alive, restart if they die
+        print(f"\nClient host ready.")
+        print(f"Attach to watch:  tmux attach -t {SESSION}")
+        for cont in my_local_clients:
+            print(f"  lxc exec {cont} -- tmux attach -t supernode")
+        print(f"\nTerminal is free. Training is running.")
 
 
 # def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
