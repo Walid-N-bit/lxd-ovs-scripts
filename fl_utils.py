@@ -19,7 +19,7 @@ import json
 from typing import Optional
 
 
-def cmd(command: list | str) -> str:
+def new_cmd(command: list | str) -> str:
     if isinstance(command, str):
         command = command.split()
     result = subprocess.run(command, capture_output=True, text=True)
@@ -57,14 +57,14 @@ SESSION = "fl_training"
 
 
 def tmux(cmd_str: str) -> str:
-    return cmd(f"tmux {cmd_str}")
+    return new_cmd(f"tmux {cmd_str}")
 
 
 def tmux_new_session():
     # Kill existing session if present to start clean
-    cmd(f"tmux kill-session -t {SESSION} 2>/dev/null")
+    new_cmd(f"tmux kill-session -t {SESSION} 2>/dev/null")
     time.sleep(0.5)
-    cmd(f"tmux new-session -d -s {SESSION} -x 220 -y 50")
+    new_cmd(f"tmux new-session -d -s {SESSION} -x 220 -y 50")
     print(f"tmux session '{SESSION}' created.")
 
 
@@ -79,7 +79,7 @@ def tmux_new_pane() -> str:
 
 
 def tmux_send(pane_id: str, keys: str):
-    cmd(["tmux", "send-keys", "-t", pane_id, keys, "C-m"])
+    new_cmd(["tmux", "send-keys", "-t", pane_id, keys, "C-m"])
 
 
 def tmux_run_in_cont(pane_id: str, cont: str, command: str):
@@ -92,7 +92,7 @@ def tmux_run_in_cont(pane_id: str, cont: str, command: str):
 
 
 def tmux_tile():
-    cmd(f"tmux select-layout -t {SESSION} tiled")
+    new_cmd(f"tmux select-layout -t {SESSION} tiled")
 
 
 # ── Core operations ───────────────────────────────────────────────────────────
@@ -103,9 +103,10 @@ def cleanup_container(cont: str):
     lxc_exec(
         cont,
         (
-            "pkill -f flower-supernode 2>/dev/null; "
-            "pkill -f flower-superexec 2>/dev/null; "
-            "pkill -f flower-superlink 2>/dev/null; "
+            "pkill -9 -f flower-supernode 2>/dev/null; "
+            "pkill -9 -f flower-superexec 2>/dev/null; "
+            "pkill -9 -f flower-superlink 2>/dev/null; "
+            "sleep 2; "  # wait for ports to release
             "rm -rf /root/.flwr/apps/ /root/.flwr/superlink/; "
             "echo cleaned"
         ),
@@ -146,24 +147,38 @@ def start_supernode_tmux(
 def start_supernode_background(
     cont: str, server_ip: str, partition_id: int, num_partitions: int
 ):
-    """Start a remote SuperNode silently via lxc exec (no tmux available)."""
+    """
+    Start a remote SuperNode in a detached tmux session inside the container.
+    - Survives launcher exit and Ctrl+C
+    - Can be attached to later with:
+      lxc exec <cont> -- tmux attach -t supernode
+    """
     print(
-        f"  {cont} → partition-id={partition_id} (background, log: /tmp/supernode_{cont}.log)"
+        f"  {cont} → partition-id={partition_id} " f"(detached tmux inside container)"
     )
+
+    supernode_cmd = (
+        f"cd fl_app && source venv/bin/activate && "
+        f"flower-supernode "
+        f"--insecure "
+        f"--superlink {server_ip}:9092 "
+        f"--node-config 'partition-id={partition_id} num-partitions={num_partitions}' "
+        f"2>&1 | tee /tmp/supernode_{cont}.log"
+    )
+
+    # Kill any existing supernode tmux session first
+    lxc_exec(cont, "tmux kill-session -t supernode 2>/dev/null; sleep 0.5")
+
+    # Start a new detached tmux session inside the container running the supernode
     lxc_exec(
         cont,
-        (
-            f"cd fl_app && source venv/bin/activate && "
-            f"nohup flower-supernode "
-            f"--insecure "
-            f"--superlink {server_ip}:9092 "
-            f"--node-config 'partition-id={partition_id} num-partitions={num_partitions}' "
-            f"> /tmp/supernode_{cont}.log 2>&1 &"
-        ),
+        (f"tmux new-session -d -s supernode " f"-x 200 -y 50 " f"'{supernode_cmd}'"),
     )
 
 
-def wait_for_nodes(server_cont: str, expected: int, timeout: int = 180) -> bool:
+def wait_for_nodes(
+    server_cont: str, expected: int, remote_clients: list, timeout: int = 180
+) -> bool:
     print(f"\nWaiting for {expected} nodes (timeout={timeout}s)...")
     start = time.time()
     count = 0
@@ -176,12 +191,33 @@ def wait_for_nodes(server_cont: str, expected: int, timeout: int = 180) -> bool:
             count = int(result.strip().split("\n")[-1])
         except ValueError:
             count = 0
+
         elapsed = int(time.time() - start)
         print(f"  [{elapsed}s] {count}/{expected} nodes activated", end="\r")
+
         if count >= expected:
             print(f"\n  All {expected} nodes ready after {elapsed}s.")
             return True
+
+        # Check remote supernodes are still alive every 15s
+        if int(time.time() - start) % 15 == 0 and remote_clients:
+            for cont in remote_clients:
+                alive = lxc_exec(
+                    cont,
+                    "tmux has-session -t supernode 2>/dev/null && echo alive || echo dead",
+                )
+                if "dead" in alive:
+                    print(
+                        f"\n  WARNING: supernode tmux session died on {cont}, check logs:"
+                    )
+                    print(
+                        lxc_exec(
+                            cont, f"tail -10 /tmp/supernode_{cont}.log 2>/dev/null"
+                        )
+                    )
+
         time.sleep(5)
+
     print(f"\n  TIMEOUT: only {count}/{expected} nodes connected.")
     return False
 
