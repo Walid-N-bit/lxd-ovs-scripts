@@ -85,6 +85,50 @@ def cleanup_flower_state(containers: list, server_cont: str):
         print(f"  Cleaned {cont}")
 
 
+def count_connected_nodes(
+    server_cont: str, log_file: str = "/tmp/superlink.log"
+) -> int:
+    """
+    Return the number of SuperNodes that have successfully connected to the SuperLink.
+    Parses Flower's registration log marker ('ActivateNode') for accurate counting.
+    """
+    # Safely count connection events; returns 0 if log doesn't exist yet
+    check_cmd = (
+        f"lxc exec {server_cont} -- bash -c "
+        f"'[ -f {log_file} ] && grep -c \"ActivateNode\" {log_file} 2>/dev/null || echo 0'"
+    )
+    res = cmd(check_cmd, shell=True).strip()
+    try:
+        return int(res)
+    except ValueError:
+        return 0
+
+
+def wait_for_clients(server_cont: str, expected: int, timeout: int = 90) -> bool:
+    """
+    check if all clients are connected.
+
+    :param server_cont: name of server container
+    :type server_cont: str
+    :param expected: total number of clients
+    :type expected: int
+    :param log_file: flwr logs
+    :type log_file: str
+    :return: True if all clients are connected, False otherwise
+    :rtype: bool
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        connected_clients = count_connected_nodes(server_cont)
+        if connected_clients >= expected:
+            elapsed = int(time.time() - start)
+            print(f"\n All {expected} clients are connected after {elapsed}s\n")
+            return True
+
+    print(f"\n Timeout: only {connected_clients} clients have connected\n")
+    return False
+
+
 def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
     """
     create tmux session and panes for each client/server process. Start flwr application.
@@ -181,11 +225,12 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     bordered_print("Initializing containers venvs")
     for cont in clients_info:
         pane = clients_info.get(cont).get("pane")
-        try:
-            init_cont(cont, pane, session_name)
-        except Exception as e:
-            print(f"ERROR: {e}")
-        print(f"{cont} done")
+        if cont in local_clients:
+            try:
+                init_cont(cont, pane, session_name)
+            except Exception as e:
+                print(f"ERROR: {e}")
+            print(f"{cont} done")
 
     #   7. launch superlink if server is local
     bordered_print("Starting Server SuperLink")
@@ -204,8 +249,9 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         send_keys(pane, supernode_command, session_name)
 
     #   9. check if all clients (local and remote) have connected
-    # while True:
-    #     pass
+    all_connected = wait_for_clients(server_cont, len(all_clients))
+    if not all_connected:
+        raise RuntimeError("Not all clients connected to server")
 
     #   10. run flwr app
     if is_server_local:
