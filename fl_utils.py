@@ -168,12 +168,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
 
     # Process steps:
 
-    # ── 0. CLEAN & VERIFY (CRITICAL) ──────────────────────────────────────────
-    bordered_print("Cleaning stale Flower state")
-    cleanup_flower_state(containers, server_cont)
-    wait_for_ports_free(server_cont, [9092, 9093, 9094], timeout=10)
-
-    #   1. separate local and remote containers
+    #   0. separate local and remote containers
     all_local_conts = get_container_names()
     local_clients = [cont for cont in containers if cont in all_local_conts]
     if server_cont in local_clients:
@@ -185,6 +180,11 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     }
 
     print(f"\n{all_clients = }\n")
+
+    # ── 1. CLEAN & VERIFY (CRITICAL) ──────────────────────────────────────────
+    bordered_print("Cleaning stale Flower state")
+    cleanup_flower_state(local_clients, server_cont)
+    wait_for_ports_free(server_cont, [9092, 9093, 9094], timeout=10)
 
     #   2. determine if current host is local or remote
     is_server_local = server_cont in all_local_conts
