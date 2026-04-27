@@ -18,7 +18,7 @@ import json
 from typing import Optional
 
 
-def cmd(command: list | str) -> str:
+def new_cmd(command: list | str) -> str:
     if isinstance(command, str):
         command = command.split()
     result = subprocess.run(command, capture_output=True, text=True)
@@ -52,7 +52,7 @@ def cleanup_container(cont: str):
     """Kill stale flower processes and clear FAB cache."""
     print(f"  Cleaning {cont}...")
     lxc_target = cont if is_local_cont(cont) else f"remote:{cont}"
-    cmd(
+    new_cmd(
         [
             "lxc",
             "exec",
@@ -87,7 +87,7 @@ def start_supernode(cont: str, server_ip: str, partition_id: int, num_partitions
         f"> /tmp/supernode_{cont}.log 2>&1 &"
     )
 
-    result = cmd(["lxc", "exec", lxc_target, "--", "bash", "-c", supernode_cmd])
+    result = new_cmd(["lxc", "exec", lxc_target, "--", "bash", "-c", supernode_cmd])
     print(f"  Started supernode on {cont} (partition {partition_id}/{num_partitions})")
     return result
 
@@ -101,7 +101,7 @@ def wait_for_nodes(server_cont: str, expected: int, timeout: int = 120) -> bool:
     start = time.time()
 
     while time.time() - start < timeout:
-        result = cmd(
+        result = new_cmd(
             [
                 "lxc",
                 "exec",
@@ -196,7 +196,7 @@ def start_fed_training(
             f"running flwr run. Run this script from the host that owns {server_cont}."
         )
 
-    cmd(
+    new_cmd(
         [
             "lxc",
             "exec",
@@ -212,7 +212,7 @@ def start_fed_training(
     time.sleep(3)
 
     # Verify SuperLink is up
-    check = cmd(
+    check = new_cmd(
         [
             "lxc",
             "exec",
@@ -242,7 +242,7 @@ def start_fed_training(
 
     # ── Step 5: Launch training ───────────────────────────────────────────────
     print(f"\n=== Starting federated run ===")
-    cmd(
+    new_cmd(
         [
             "lxc",
             "exec",
