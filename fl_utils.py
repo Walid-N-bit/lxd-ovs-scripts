@@ -100,7 +100,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     #   4. create tmux session
     bordered_print("starting new session")
     session_name = "fl_session"
-    cmd(["tmux", "-d", "-s", session_name])
+    cmd(["tmux", "new", "-d", "-s", session_name])
 
     #   5. create panes in tmux session for local containers
     #       (two for server, one for each client)
