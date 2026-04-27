@@ -13,68 +13,334 @@ TEST_DATA = "compressed_images_wheat/test.csv"
 PARTITIONING = "compressed_images_wheat/data_partition.json"
 DATA_DIR = "compressed_images_wheat"
 
+import subprocess
+import json
+from typing import Optional
 
-def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
+
+def cmd(command: list | str) -> str:
+    if isinstance(command, str):
+        command = command.split()
+    result = subprocess.run(command, capture_output=True, text=True)
+    return result.stdout + result.stderr
+
+
+def get_container_names() -> list[str]:
+    """Return names of containers on the local LXD host."""
+    result = subprocess.run(
+        ["lxc", "list", "--format", "json"], capture_output=True, text=True
+    )
+    containers = json.loads(result.stdout)
+    return [c["name"] for c in containers if c["status"] == "Running"]
+
+
+def get_host_id(prefix: str, cont_name: str) -> str:
+    """Extract numeric ID from container name e.g. cont-140 → 140."""
+    return cont_name.split("-")[-1]
+
+
+def is_local_cont(cont: str) -> bool:
+    return cont in get_container_names()
+
+
+def get_server_ip(server_cont: str) -> str:
+    host_id = get_host_id("vm", server_cont)
+    return f"10.0.200.{host_id}"
+
+
+def cleanup_container(cont: str):
+    """Kill stale flower processes and clear FAB cache."""
+    print(f"  Cleaning {cont}...")
+    lxc_target = cont if is_local_cont(cont) else f"remote:{cont}"
+    cmd(
+        [
+            "lxc",
+            "exec",
+            lxc_target,
+            "--",
+            "bash",
+            "-c",
+            "pkill -f flower-supernode 2>/dev/null; "
+            "pkill -f flower-superexec 2>/dev/null; "
+            "pkill -f flower-superlink 2>/dev/null; "
+            "rm -rf /root/.flwr/apps/ "
+            "/root/.flwr/superlink/ "  # remove if accidentally created
+            "; echo done",
+        ]
+    )
+
+
+def start_supernode(cont: str, server_ip: str, partition_id: int, num_partitions: int):
     """
-    create tmux panes and send commands to each to start the federated learning process
+    Start a supernode on any container — local or remote — using lxc exec.
+    This is reliable regardless of which host machine runs this script.
+    """
+    lxc_target = cont if is_local_cont(cont) else f"remote:{cont}"
+
+    # Build the supernode command
+    supernode_cmd = (
+        f"cd fl_app && source venv/bin/activate && "
+        f"nohup flower-supernode "
+        f"--insecure "
+        f"--superlink {server_ip}:9092 "
+        f"--node-config 'partition-id={partition_id} num-partitions={num_partitions}' "
+        f"> /tmp/supernode_{cont}.log 2>&1 &"
+    )
+
+    result = cmd(["lxc", "exec", lxc_target, "--", "bash", "-c", supernode_cmd])
+    print(f"  Started supernode on {cont} (partition {partition_id}/{num_partitions})")
+    return result
+
+
+def wait_for_nodes(server_cont: str, expected: int, timeout: int = 120) -> bool:
+    """
+    Poll SuperLink log until all expected nodes have activated.
+    Returns True if all nodes ready, False if timeout.
+    """
+    print(f"\nWaiting for {expected} nodes to connect (timeout={timeout}s)...")
+    start = time.time()
+
+    while time.time() - start < timeout:
+        result = cmd(
+            [
+                "lxc",
+                "exec",
+                server_cont,
+                "--",
+                "bash",
+                "-c",
+                "grep -c 'ActivateNode' /tmp/superlink.log 2>/dev/null || echo 0",
+            ]
+        )
+        try:
+            count = int(result.strip().split("\n")[-1])
+        except ValueError:
+            count = 0
+
+        elapsed = int(time.time() - start)
+        print(f"  [{elapsed}s] Nodes activated: {count}/{expected}", end="\r")
+
+        if count >= expected:
+            print(f"\n  All {expected} nodes connected after {elapsed}s.")
+            return True
+        time.sleep(5)
+
+    print(f"\n  TIMEOUT: Only {count}/{expected} nodes connected after {timeout}s.")
+    return False
+
+
+def get_node_logs(containers: list, server_cont: str):
+    """Print supernode logs for debugging after a failed round."""
+    print("\n=== Node Status Report ===")
+    for cont in containers:
+        if cont == server_cont:
+            continue
+        lxc_target = cont if is_local_cont(cont) else f"remote:{cont}"
+        print(f"\n--- {cont} ---")
+        result = cmd(
+            [
+                "lxc",
+                "exec",
+                lxc_target,
+                "--",
+                "bash",
+                "-c",
+                f"tail -20 /tmp/supernode_{cont}.log 2>/dev/null || echo 'no log found'",
+            ]
+        )
+        print(result)
+
+
+def start_fed_training(
+    containers: list,
+    server_cont: str,
+    pyproject_path: str = ".",
+    lxc_remote_name: str = "remote",  # name of remote LXD remote, set via `lxc remote add`
+    node_ready_timeout: int = 120,
+):
+    """
+    Robust federated learning launcher.
+
+    Works correctly across two LXD hosts. Uses lxc exec for all container
+    operations instead of tmux shell, ensuring remote containers are started.
+
+    Args:
+        containers:          All participating containers (local + remote)
+        server_cont:         Name of the SuperLink container
+        pyproject_path:      Path to pass to `flwr run`
+        lxc_remote_name:     Name of the remote LXD host as configured in `lxc remote`
+        node_ready_timeout:  Seconds to wait for all nodes before aborting
     """
 
     containers = sorted(containers)
+    clients = [c for c in containers if c != server_cont]
+    num_partitions = len(clients)
+    server_ip = get_server_ip(server_cont)
 
-    def send_keys(keys: str):
-        return ["tmux", "send-keys", keys, "C-m"]
+    print(f"Server:      {server_cont} ({server_ip})")
+    print(f"Clients:     {clients}")
+    print(f"Partitions:  {num_partitions}")
+    print(f"Remote name: {lxc_remote_name}\n")
 
-    def is_local_cont(cont: str) -> bool:
-        local_conts = get_container_names()
-        if cont in local_conts:
-            return True
-        else:
-            return False
+    # ── Step 1: Clean all containers ─────────────────────────────────────────
+    print("=== Cleaning stale state ===")
+    all_targets = [server_cont] + clients
+    for cont in all_targets:
+        cleanup_container(cont)
 
-    # create session
-    sess_out = cmd("tmux new -d")
+    # ── Step 2: Start SuperLink ───────────────────────────────────────────────
+    print(f"\n=== Starting SuperLink on {server_cont} ===")
+    if not is_local_cont(server_cont):
+        raise RuntimeError(
+            f"Server container '{server_cont}' must be local to the machine "
+            f"running flwr run. Run this script from the host that owns {server_cont}."
+        )
 
-    print(sess_out)
-    # start server
-    if is_local_cont(server_cont):
-        id = get_host_id("vm", server_cont)
-        server_ip = f"10.0.200.{id}"
-        cmd(send_keys(f"lxc shell {server_cont}"))
-        cmd(send_keys("cd fl_app ; source venv/bin/activate"))
-        cmd(send_keys("FLWR_LOG_LEVEL=DEBUG flower-superlink --insecure"))
-    else:
-        id = server_cont[5:]
-        server_ip = f"10.0.200.{id}"
+    cmd(
+        [
+            "lxc",
+            "exec",
+            server_cont,
+            "--",
+            "bash",
+            "-c",
+            "cd fl_app && source venv/bin/activate && "
+            "nohup flower-superlink --insecure "
+            "> /tmp/superlink.log 2>&1 &",
+        ]
+    )
+    time.sleep(3)
 
-    # start clients
-    clients = containers.copy()
-    if server_cont in clients:
-        clients.remove(server_cont)
-    nbr_parts = len(clients)
+    # Verify SuperLink is up
+    check = cmd(
+        [
+            "lxc",
+            "exec",
+            server_cont,
+            "--",
+            "bash",
+            "-c",
+            "pgrep -f flower-superlink && echo UP || echo FAILED",
+        ]
+    )
+    if "FAILED" in check:
+        raise RuntimeError("SuperLink failed to start. Check /tmp/superlink.log")
+    print(f"SuperLink running on {server_ip}:9092")
 
-    print(f"\n{clients = }")
-    print(f"{server_ip = }\n")
-
+    # ── Step 3: Start all SuperNodes ─────────────────────────────────────────
+    print(f"\n=== Starting {num_partitions} SuperNodes ===")
     for i, cont in enumerate(clients):
-        if is_local_cont(cont):
-            commands = [
-                f"lxc shell {cont}",
-                "cd fl_app ; source venv/bin/activate",
-                f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={i} num-partitions={nbr_parts}'",
-            ]
-            cmd("tmux split-window -h")
-            for c in commands:
-                cmd(send_keys(c))
-    time.sleep(10)
-    # start trining
-    if is_local_cont(server_cont):
-        cmd(["tmux", "split-window", "-h"])
-        cmd(send_keys(f"lxc shell {server_cont}"))
-        cmd(send_keys("cd fl_app ; source venv/bin/activate"))
-        cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
+        start_supernode(cont, server_ip, i, num_partitions)
 
-    # to adjust panes
-    cmd("tmux select-layout tiled")
+    # ── Step 4: Wait for all nodes to connect ────────────────────────────────
+    all_connected = wait_for_nodes(server_cont, num_partitions, node_ready_timeout)
+
+    if not all_connected:
+        print("\nNot all nodes connected. Collecting logs for diagnosis...")
+        get_node_logs(clients, server_cont)
+        raise RuntimeError(f"Aborting: not all nodes connected. " f"Check logs above.")
+
+    # ── Step 5: Launch training ───────────────────────────────────────────────
+    print(f"\n=== Starting federated run ===")
+    cmd(
+        [
+            "lxc",
+            "exec",
+            server_cont,
+            "--",
+            "bash",
+            "-c",
+            f"cd fl_app && source venv/bin/activate && "
+            f"flwr run {pyproject_path} local-deployment --stream "
+            f">> /tmp/flwr_run.log 2>&1 &",
+        ]
+    )
+
+    print(f"Training started. Streaming logs from {server_cont}:")
+    print("-" * 60)
+
+    # Stream the run log
+    try:
+        proc = subprocess.Popen(
+            [
+                "lxc",
+                "exec",
+                server_cont,
+                "--",
+                "bash",
+                "-c",
+                "tail -f /tmp/flwr_run.log",
+            ],
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        for line in proc.stdout:
+            print(line, end="")
+    except KeyboardInterrupt:
+        print("\nLog streaming stopped (training continues in background).")
+
+
+# def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
+#     """
+#     create tmux panes and send commands to each to start the federated learning process
+#     """
+
+#     containers = sorted(containers)
+
+#     def send_keys(keys: str):
+#         return ["tmux", "send-keys", keys, "C-m"]
+
+#     def is_local_cont(cont: str) -> bool:
+#         local_conts = get_container_names()
+#         if cont in local_conts:
+#             return True
+#         else:
+#             return False
+
+#     # create session
+#     sess_out = cmd("tmux new -d")
+
+#     print(sess_out)
+#     # start server
+#     if is_local_cont(server_cont):
+#         id = get_host_id("vm", server_cont)
+#         server_ip = f"10.0.200.{id}"
+#         cmd(send_keys(f"lxc shell {server_cont}"))
+#         cmd(send_keys("cd fl_app ; source venv/bin/activate"))
+#         cmd(send_keys("FLWR_LOG_LEVEL=DEBUG flower-superlink --insecure"))
+#     else:
+#         id = server_cont[5:]
+#         server_ip = f"10.0.200.{id}"
+
+#     # start clients
+#     clients = containers.copy()
+#     if server_cont in clients:
+#         clients.remove(server_cont)
+#     nbr_parts = len(clients)
+
+#     print(f"\n{clients = }")
+#     print(f"{server_ip = }\n")
+
+#     for i, cont in enumerate(clients):
+#         if is_local_cont(cont):
+#             commands = [
+#                 f"lxc shell {cont}",
+#                 "cd fl_app ; source venv/bin/activate",
+#                 f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={i} num-partitions={nbr_parts}'",
+#             ]
+#             cmd("tmux split-window -h")
+#             for c in commands:
+#                 cmd(send_keys(c))
+#     time.sleep(10)
+#     # start trining
+#     if is_local_cont(server_cont):
+#         cmd(["tmux", "split-window", "-h"])
+#         cmd(send_keys(f"lxc shell {server_cont}"))
+#         cmd(send_keys("cd fl_app ; source venv/bin/activate"))
+#         cmd(send_keys(f"flwr run {pyproject_path} local-deployment --stream"))
+
+#     # to adjust panes
+#     cmd("tmux select-layout tiled")
 
 
 # def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
