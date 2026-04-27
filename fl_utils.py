@@ -211,7 +211,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         for i, cont in enumerate(local_clients, 1):
             cmd(["tmux", "split-window", "-t", session_name, "-h"])
             clients_info[cont].update({"pane": i})
-            print(f"{cont} done")
+            print(f"{cont}: {clients_info[cont]}")
 
     else:
         for i, cont in enumerate(local_clients):
@@ -231,6 +231,8 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             except Exception as e:
                 print(f"ERROR: {e}")
             print(f"{cont} done")
+
+    print(f"\n{clients_info = }\n")
 
     #   7. launch superlink if server is local
     bordered_print("Starting Server SuperLink")
