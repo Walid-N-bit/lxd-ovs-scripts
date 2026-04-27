@@ -177,11 +177,12 @@ def start_supernode_background(
 
 
 def wait_for_nodes(
-    server_cont: str, expected: int, remote_clients: list, timeout: int = 180
+    server_cont: str, expected: int, has_remote: bool = False, timeout: int = 180
 ) -> bool:
-    print(f"\nWaiting for {expected} nodes (timeout={timeout}s)...")
+    print(f"\nWaiting for {expected} nodes to connect (timeout={timeout}s)...")
     start = time.time()
     count = 0
+
     while time.time() - start < timeout:
         result = lxc_exec(
             server_cont,
@@ -193,28 +194,18 @@ def wait_for_nodes(
             count = 0
 
         elapsed = int(time.time() - start)
-        print(f"  [{elapsed}s] {count}/{expected} nodes activated", end="\r")
+        print(f"  [{elapsed}s] {count}/{expected} nodes connected", end="\r")
 
         if count >= expected:
-            print(f"\n  All {expected} nodes ready after {elapsed}s.")
+            print(f"\n  All {expected} nodes connected after {elapsed}s.")
+            if has_remote:
+                # Remote nodes need extra time to load venv + ClientApp after connecting
+                print(f"  Giving remote nodes 15s to finish loading ClientApp...")
+                for i in range(15, 0, -1):
+                    print(f"  Starting in {i}s...  ", end="\r")
+                    time.sleep(1)
+                print()
             return True
-
-        # Check remote supernodes are still alive every 15s
-        if int(time.time() - start) % 15 == 0 and remote_clients:
-            for cont in remote_clients:
-                alive = lxc_exec(
-                    cont,
-                    "tmux has-session -t supernode 2>/dev/null && echo alive || echo dead",
-                )
-                if "dead" in alive:
-                    print(
-                        f"\n  WARNING: supernode tmux session died on {cont}, check logs:"
-                    )
-                    print(
-                        lxc_exec(
-                            cont, f"tail -10 /tmp/supernode_{cont}.log 2>/dev/null"
-                        )
-                    )
 
         time.sleep(5)
 
@@ -344,7 +335,13 @@ def start_fed_training(
 
     # ── 6. Server host: wait then run ─────────────────────────────────────────
     if is_server_host:
-        all_ready = wait_for_nodes(server_cont, num_partitions, node_ready_timeout)
+        # all_ready = wait_for_nodes(server_cont, num_partitions, node_ready_timeout)
+        all_ready = wait_for_nodes(
+            server_cont,
+            num_partitions,
+            has_remote=len(my_remote_clients) > 0,
+            timeout=node_ready_timeout,
+        )
 
         if not all_ready:
             collect_logs(my_local_clients + my_remote_clients)
@@ -367,28 +364,9 @@ def start_fed_training(
         # Client host: keep supernodes alive, restart if they die
         print(f"\nClient host ready.")
         print(f"Attach to watch:  tmux attach -t {SESSION}")
-        print("Monitoring supernodes (Ctrl+C to stop)...\n")
-        try:
-            while True:
-                time.sleep(30)
-                for cont in my_local_clients:
-                    alive = lxc_exec(
-                        cont, "pgrep -f flower-supernode && echo alive || echo dead"
-                    )
-                    if "dead" in alive:
-                        print(f"WARNING: supernode on {cont} died, restarting...")
-                        pane_idx = my_local_clients.index(cont)
-                        start_supernode_tmux(
-                            cont,
-                            server_ip,
-                            partition_map[cont],
-                            num_partitions,
-                            pane_ids[pane_idx + (1 if is_server_host else 0)],
-                        )
-        except KeyboardInterrupt:
-            print("\nStopping local supernodes...")
-            for cont in my_local_clients:
-                lxc_exec(cont, "pkill -f flower-supernode 2>/dev/null")
+        for cont in my_local_clients:
+            print(f"  lxc exec {cont} -- tmux attach -t supernode")
+        print(f"\nTerminal is free. Training is running.")
 
 
 # def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
