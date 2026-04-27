@@ -13,445 +13,445 @@ TEST_DATA = "compressed_images_wheat/test.csv"
 PARTITIONING = "compressed_images_wheat/data_partition.json"
 DATA_DIR = "compressed_images_wheat"
 
-import subprocess
-import time
-import json
-from typing import Optional
+# import subprocess
+# import time
+# import json
+# from typing import Optional
 
 
-def new_cmd(command: list | str) -> str:
-    if isinstance(command, str):
-        command = command.split()
-    result = subprocess.run(command, capture_output=True, text=True)
-    return result.stdout + result.stderr
+# def new_cmd(command: list | str) -> str:
+#     if isinstance(command, str):
+#         command = command.split()
+#     result = subprocess.run(command, capture_output=True, text=True)
+#     return result.stdout + result.stderr
 
 
-def get_local_containers() -> list[str]:
-    result = subprocess.run(
-        ["lxc", "list", "--format", "json"], capture_output=True, text=True
-    )
-    containers = json.loads(result.stdout)
-    return [c["name"] for c in containers if c["status"] == "Running"]
+# def get_local_containers() -> list[str]:
+#     result = subprocess.run(
+#         ["lxc", "list", "--format", "json"], capture_output=True, text=True
+#     )
+#     containers = json.loads(result.stdout)
+#     return [c["name"] for c in containers if c["status"] == "Running"]
 
 
-def is_local_cont(cont: str) -> bool:
-    return cont in get_local_containers()
+# def is_local_cont(cont: str) -> bool:
+#     return cont in get_local_containers()
 
 
-def lxc_exec(cont: str, bash_cmd: str, ignore_errors: bool = False) -> str:
-    result = subprocess.run(
-        ["lxc", "exec", cont, "--", "bash", "-c", bash_cmd],
-        capture_output=True,
-        text=True,
-    )
-    output = result.stdout + result.stderr
-    if result.returncode != 0 and not ignore_errors:
-        # Detect common LXD errors
-        if any(err in output.lower() for err in ["error:", "not found", "invalid"]):
-            raise RuntimeError(f"lxc exec failed for '{cont}': {output.strip()[:300]}")
-    return output
+# def lxc_exec(cont: str, bash_cmd: str, ignore_errors: bool = False) -> str:
+#     result = subprocess.run(
+#         ["lxc", "exec", cont, "--", "bash", "-c", bash_cmd],
+#         capture_output=True,
+#         text=True,
+#     )
+#     output = result.stdout + result.stderr
+#     if result.returncode != 0 and not ignore_errors:
+#         # Detect common LXD errors
+#         if any(err in output.lower() for err in ["error:", "not found", "invalid"]):
+#             raise RuntimeError(f"lxc exec failed for '{cont}': {output.strip()[:300]}")
+#     return output
 
 
-def get_server_ip(server_cont: str) -> str:
-    return f"10.0.200.{server_cont.split('-')[-1]}"
+# def get_server_ip(server_cont: str) -> str:
+#     return f"10.0.200.{server_cont.split('-')[-1]}"
 
 
-# ── tmux helpers ──────────────────────────────────────────────────────────────
+# # ── tmux helpers ──────────────────────────────────────────────────────────────
 
-SESSION = "fl_training"
+# SESSION = "fl_training"
 
 
-def tmux(cmd_str: str) -> str:
-    return new_cmd(f"tmux {cmd_str}")
+# def tmux(cmd_str: str) -> str:
+#     return new_cmd(f"tmux {cmd_str}")
 
 
-def tmux_new_session():
-    # Kill existing session if present to start clean
-    new_cmd(f"tmux kill-session -t {SESSION} 2>/dev/null")
-    time.sleep(0.5)
-    new_cmd(f"tmux new-session -d -s {SESSION} -x 220 -y 50")
-    print(f"tmux session '{SESSION}' created.")
-
-
-def tmux_new_pane() -> str:
-    """Split a new pane and return its id."""
-    result = subprocess.run(
-        ["tmux", "split-window", "-t", SESSION, "-h", "-P", "-F", "#{pane_id}"],
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout.strip()
-
-
-def tmux_send(pane_id: str, keys: str):
-    new_cmd(["tmux", "send-keys", "-t", pane_id, keys, "C-m"])
-
-
-def tmux_run_in_cont(pane_id: str, cont: str, command: str):
-    """Open a container shell in a pane and run a command."""
-    tmux_send(pane_id, f"lxc exec {cont} -- bash")
-    time.sleep(0.5)
-    tmux_send(pane_id, "cd fl_app && source venv/bin/activate")
-    time.sleep(0.3)
-    tmux_send(pane_id, command)
-
-
-def tmux_tile():
-    new_cmd(f"tmux select-layout -t {SESSION} tiled")
-
-
-# ── Core operations ───────────────────────────────────────────────────────────
-
-
-def cleanup_container(cont: str):
-    print(f"  Cleaning {cont}...")
-
-    # 1. Find PIDs holding ports 9092/9093 FIRST (before killing)
-    port_pids = (
-        lxc_exec(
-            cont,
-            """
-        for port in 9092 9093; do
-            pid=$(ss -tlnp 2>/dev/null | grep ":$port " | grep -oP 'pid=\K[0-9]+' | head -1)
-            [ -n "$pid" ] && echo "$pid"
-        done
-    """,
-        )
-        .strip()
-        .split("\n")
-    )
-    port_pids = [p for p in port_pids if p]  # filter empty
-
-    # 2. Kill ALL flower/flwr related processes by pattern
-    lxc_exec(
-        cont,
-        """
-        pkill -9 -f 'flower-' 2>/dev/null
-        pkill -9 -f 'flwr ' 2>/dev/null
-        pkill -9 -f 'ray::' 2>/dev/null
-        sleep 1
-    """,
-        ignore_errors=True,
-    )
-
-    # 3. Force-kill any PIDs that were holding our ports (in case patterns missed)
-    for pid in port_pids:
-        lxc_exec(cont, f"kill -9 {pid} 2>/dev/null || true")
-
-    # 4. Wait for kernel to release sockets (longer for safety)
-    lxc_exec(cont, "sleep 5")
-
-    # 5. Verify ports are actually free
-    still_busy = lxc_exec(
-        cont, "ss -tlnp | grep -E ':(9092|9093) ' || echo FREE"
-    ).strip()
-    if "FREE" not in still_busy:
-        print(f"  Warning: Ports still busy after cleanup:\n{still_busy}")
-
-    # 6. Clear Flower state
-    lxc_exec(cont, "rm -rf /root/.flwr/apps/ /root/.flwr/superlink/ 2>/dev/null")
-    print(f"  {cont} cleaned.")
-
-
-def start_superlink_tmux(server_cont: str, pane_id: str):
-    print(f"  Starting SuperLink in pane {pane_id}...")
-    tmux_run_in_cont(
-        pane_id,
-        server_cont,
-        "FLWR_LOG_LEVEL=DEBUG flower-superlink --insecure 2>&1 | tee /tmp/superlink.log",
-    )
-    time.sleep(3)
-
-    # Check for port error in log
-    log_check = lxc_exec(
-        server_cont,
-        "grep -c 'Port.*already in use' /tmp/superlink.log 2>/dev/null || echo 0",
-    )
-    if int(log_check.strip().split("\n")[-1]) > 0:
-        raise RuntimeError(
-            f"SuperLink failed: Port already in use. Check /tmp/superlink.log on {server_cont}"
-        )
-
-    # Verify process is alive
-    check = lxc_exec(server_cont, "pgrep -f flower-superlink && echo UP || echo FAILED")
-    if "UP" not in check:
-        raise RuntimeError(f"SuperLink failed to start on {server_cont}.")
-    print(f"  SuperLink running.")
-
-
-def start_supernode_tmux(
-    cont: str, server_ip: str, partition_id: int, num_partitions: int, pane_id: str
-):
-    """Start a local SuperNode in a visible tmux pane."""
-    print(f"  {cont} → partition-id={partition_id} (tmux pane {pane_id})")
-    tmux_run_in_cont(
-        pane_id,
-        cont,
-        f"flower-supernode --insecure "
-        f"--superlink {server_ip}:9092 "
-        f"--node-config 'partition-id={partition_id} num-partitions={num_partitions}' "
-        f"2>&1 | tee /tmp/supernode_{cont}.log",
-    )
-
-
-def start_supernode_background(
-    cont: str, server_ip: str, partition_id: int, num_partitions: int
-):
-    """
-    Start a remote SuperNode in a detached tmux session inside the container.
-    - Survives launcher exit and Ctrl+C
-    - Can be attached to later with:
-      lxc exec <cont> -- tmux attach -t supernode
-    """
-    print(
-        f"  {cont} → partition-id={partition_id} " f"(detached tmux inside container)"
-    )
-
-    supernode_cmd = (
-        f"cd fl_app && source venv/bin/activate && "
-        f"flower-supernode "
-        f"--insecure "
-        f"--superlink {server_ip}:9092 "
-        f"--node-config 'partition-id={partition_id} num-partitions={num_partitions}' "
-        f"2>&1 | tee /tmp/supernode_{cont}.log"
-    )
-
-    # Kill any existing supernode tmux session first
-    lxc_exec(cont, "tmux kill-session -t supernode 2>/dev/null; sleep 0.5")
-
-    # Start a new detached tmux session inside the container running the supernode
-    lxc_exec(
-        cont,
-        f'tmux new-session -d -s supernode -x 200 -y 50 "{supernode_cmd}"',
-    )
-
-
-def wait_for_nodes(
-    server_cont: str, expected: int, has_remote: bool = False, timeout: int = 180
-) -> bool:
-    print(f"\nWaiting for {expected} nodes to connect (timeout={timeout}s)...")
-    start = time.time()
-    count = 0
-
-    while time.time() - start < timeout:
-        result = lxc_exec(
-            server_cont,
-            "grep -c 'ActivateNode' /tmp/superlink.log 2>/dev/null || echo 0",
-        )
-        try:
-            count = int(result.strip().split("\n")[-1])
-        except ValueError:
-            count = 0
-
-        elapsed = int(time.time() - start)
-        print(f"  [{elapsed}s] {count}/{expected} nodes connected", end="\r")
-
-        if count >= expected:
-            print(f"\n  All {expected} nodes connected after {elapsed}s.")
-            if has_remote:
-                print("  Waiting for remote ClientApps to initialize...")
-                for _ in range(30):  # Max 30s wait
-                    log = lxc_exec(
-                        server_cont,
-                        "grep -c 'ClientApp' /tmp/superlink.log 2>/dev/null || echo 0",
-                    )
-                    try:
-                        client_apps_started = int(log.strip().split("\n")[-1])
-                    except ValueError:
-                        client_apps_started = 0
-
-                    if client_apps_started >= expected:
-                        print("  All ClientApps initialized.")
-                        break
-                    time.sleep(1)
-                else:
-                    print(
-                        "  Warning: Timeout waiting for ClientApp init. Proceeding anyway."
-                    )
-            return True
-
-        time.sleep(5)
-
-    print(f"\n  TIMEOUT: only {count}/{expected} nodes connected.")
-    return False
-
-
-def collect_logs(clients: list):
-    print("\n=== Supernode Logs ===")
-    for cont in clients:
-        print(f"\n--- {cont} ---")
-        print(
-            lxc_exec(
-                cont, f"tail -20 /tmp/supernode_{cont}.log 2>/dev/null || echo 'no log'"
-            )
-        )
-
-
-def wait_for_port_open(cont: str, ip: str, port: int, timeout: int = 30) -> bool:
-    """Wait until a port is accepting connections (from inside the container)."""
-    print(f"  Waiting for {ip}:{port} to be ready...")
-    start = time.time()
-    while time.time() - start < timeout:
-        # Use bash built-in tcp test (no netcat dependency)
-        result = lxc_exec(
-            cont,
-            f"""
-            timeout 1 bash -c 'echo > /dev/tcp/{ip}/{port}' 2>/dev/null && echo OPEN || echo CLOSED
-        """,
-            ignore_errors=True,
-        )
-        if "OPEN" in result:
-            print(f"  Port {port} is ready.")
-            return True
-        time.sleep(1)
-    print(f"  Timeout waiting for port {port}")
-    return False
-
-
-# ── Main launcher ─────────────────────────────────────────────────────────────
-
-
-def start_fed_training(
-    containers: list,
-    server_cont: str,
-    pyproject_path: str = ".",
-    node_ready_timeout: int = 180,
-):
-    """
-    Federated learning launcher with tmux visibility for local containers.
-
-    Run on BOTH hosts with identical arguments.
-    - Server host: opens tmux panes for all local containers + flwr run pane
-    - Client host: opens tmux panes for local containers, remote ones run in background
-    - Partition IDs derived from globally sorted list — consistent across both hosts
-    """
-
-    all_containers = sorted(containers)
-    clients = [c for c in all_containers if c != server_cont]
-    num_partitions = len(clients)
-    partition_map = {cont: i for i, cont in enumerate(clients)}
-    server_ip = get_server_ip(server_cont)
-
-    local_conts = get_local_containers()
-    is_server_host = server_cont in local_conts
-    my_local_clients = [c for c in clients if c in local_conts]
-    my_remote_clients = [c for c in clients if c not in local_conts]
-
-    print(f"{'='*55}")
-    print(f"Role:           {'SERVER HOST' if is_server_host else 'CLIENT HOST'}")
-    print(f"Server:         {server_cont} ({server_ip})")
-    print(f"Local clients:  {my_local_clients}")
-    print(f"Remote clients: {my_remote_clients}")
-    print(
-        f"Partition map:  { {c: partition_map[c] for c in my_local_clients + my_remote_clients} }"
-    )
-    print(f"{'='*55}\n")
-
-    # ── 1. Clean ──────────────────────────────────────────────────────────────
-    print("=== Cleaning stale state ===")
-    clean_targets = ([server_cont] if is_server_host else []) + my_local_clients
-    for cont in clean_targets:
-        cleanup_container(cont)
-
-    # ── 2. Set up tmux session ────────────────────────────────────────────────
-    print(f"\n=== Setting up tmux session '{SESSION}' ===")
-    tmux_new_session()
-
-    # Track pane IDs — first pane already exists after new-session
-    result = subprocess.run(
-        ["tmux", "list-panes", "-t", SESSION, "-F", "#{pane_id}"],
-        capture_output=True,
-        text=True,
-    )
-    pane_ids = [result.stdout.strip()]  # first pane
-
-    # Create one pane per local container that needs one
-    local_conts_needing_pane = (
-        [server_cont] if is_server_host else []
-    ) + my_local_clients
-    # First pane goes to server (or first client if not server host)
-    # Remaining panes are split
-    for _ in range(len(local_conts_needing_pane) - 1):
-        pane_id = tmux_new_pane()
-        pane_ids.append(pane_id)
-        time.sleep(0.2)
-
-    # Add one more pane for flwr run on server host
-    if is_server_host:
-        run_pane = tmux_new_pane()
-        time.sleep(0.2)
-    else:
-        run_pane = None
-
-    tmux_tile()
-    time.sleep(0.5)
-
-    # ── 3. Start SuperLink in first pane (server host only) ───────────────────
-    pane_cursor = 0
-    if is_server_host:
-        print(f"\n=== Starting SuperLink ===")
-        start_superlink_tmux(server_cont, pane_ids[pane_cursor])
-        pane_cursor += 1
-
-        wait_for_port_open(server_cont, server_ip, 9092, timeout=20)
-
-    # ── 4. Start local SuperNodes in tmux panes ───────────────────────────────
-    if my_local_clients:
-        print(f"\n=== Starting local SuperNodes (tmux) ===")
-        for cont in my_local_clients:
-            start_supernode_tmux(
-                cont,
-                server_ip,
-                partition_map[cont],
-                num_partitions,
-                pane_ids[pane_cursor],
-            )
-            pane_cursor += 1
-            time.sleep(0.5)
-
-    # ── 5. Start remote SuperNodes in background ──────────────────────────────
-    # if my_remote_clients:
-    #     print(f"\n=== Starting remote SuperNodes (background) ===")
-    #     for cont in my_remote_clients:
-    #         start_supernode_background(
-    #             cont, server_ip, partition_map[cont], num_partitions
-    #         )
-
-    # ── 6. Server host: wait then run ─────────────────────────────────────────
-    if is_server_host:
-        # all_ready = wait_for_nodes(server_cont, num_partitions, node_ready_timeout)
-        all_ready = wait_for_nodes(
-            server_cont,
-            num_partitions,
-            has_remote=len(my_remote_clients) > 0,
-            timeout=node_ready_timeout,
-        )
-
-        if not all_ready:
-            collect_logs(my_local_clients + my_remote_clients)
-            raise RuntimeError(
-                "Not all nodes connected in time. "
-                "Ensure the client host has also called start_fed_training()."
-            )
-
-        print(f"\n=== Starting flwr run ===")
-        tmux_run_in_cont(
-            run_pane,
-            server_cont,
-            # f"flwr run {pyproject_path} local-deployment --stream 2>&1 | tee /tmp/flwr_run.log",
-            f"cd /root/fl_app && flwr run {pyproject_path} --stream 2>&1 | tee /tmp/flwr_run.log",
-        )
-        tmux_tile()
-        print(f"\nTraining started.")
-        print(f"Attach to tmux session to watch:  tmux attach -t {SESSION}")
-
-    else:
-        # Client host: keep supernodes alive, restart if they die
-        print(f"\nClient host ready.")
-        print(f"Attach to watch:  tmux attach -t {SESSION}")
-        for cont in my_local_clients:
-            print(f"  lxc exec {cont} -- tmux attach -t supernode")
-        print(f"\nTerminal is free. Training is running.")
+# def tmux_new_session():
+#     # Kill existing session if present to start clean
+#     new_cmd(f"tmux kill-session -t {SESSION} 2>/dev/null")
+#     time.sleep(0.5)
+#     new_cmd(f"tmux new-session -d -s {SESSION} -x 220 -y 50")
+#     print(f"tmux session '{SESSION}' created.")
+
+
+# def tmux_new_pane() -> str:
+#     """Split a new pane and return its id."""
+#     result = subprocess.run(
+#         ["tmux", "split-window", "-t", SESSION, "-h", "-P", "-F", "#{pane_id}"],
+#         capture_output=True,
+#         text=True,
+#     )
+#     return result.stdout.strip()
+
+
+# def tmux_send(pane_id: str, keys: str):
+#     new_cmd(["tmux", "send-keys", "-t", pane_id, keys, "C-m"])
+
+
+# def tmux_run_in_cont(pane_id: str, cont: str, command: str):
+#     """Open a container shell in a pane and run a command."""
+#     tmux_send(pane_id, f"lxc exec {cont} -- bash")
+#     time.sleep(0.5)
+#     tmux_send(pane_id, "cd fl_app && source venv/bin/activate")
+#     time.sleep(0.3)
+#     tmux_send(pane_id, command)
+
+
+# def tmux_tile():
+#     new_cmd(f"tmux select-layout -t {SESSION} tiled")
+
+
+# # ── Core operations ───────────────────────────────────────────────────────────
+
+
+# def cleanup_container(cont: str):
+#     print(f"  Cleaning {cont}...")
+
+#     # 1. Find PIDs holding ports 9092/9093 FIRST (before killing)
+#     port_pids = (
+#         lxc_exec(
+#             cont,
+#             """
+#         for port in 9092 9093; do
+#             pid=$(ss -tlnp 2>/dev/null | grep ":$port " | grep -oP 'pid=\K[0-9]+' | head -1)
+#             [ -n "$pid" ] && echo "$pid"
+#         done
+#     """,
+#         )
+#         .strip()
+#         .split("\n")
+#     )
+#     port_pids = [p for p in port_pids if p]  # filter empty
+
+#     # 2. Kill ALL flower/flwr related processes by pattern
+#     lxc_exec(
+#         cont,
+#         """
+#         pkill -9 -f 'flower-' 2>/dev/null
+#         pkill -9 -f 'flwr ' 2>/dev/null
+#         pkill -9 -f 'ray::' 2>/dev/null
+#         sleep 1
+#     """,
+#         ignore_errors=True,
+#     )
+
+#     # 3. Force-kill any PIDs that were holding our ports (in case patterns missed)
+#     for pid in port_pids:
+#         lxc_exec(cont, f"kill -9 {pid} 2>/dev/null || true")
+
+#     # 4. Wait for kernel to release sockets (longer for safety)
+#     lxc_exec(cont, "sleep 5")
+
+#     # 5. Verify ports are actually free
+#     still_busy = lxc_exec(
+#         cont, "ss -tlnp | grep -E ':(9092|9093) ' || echo FREE"
+#     ).strip()
+#     if "FREE" not in still_busy:
+#         print(f"  Warning: Ports still busy after cleanup:\n{still_busy}")
+
+#     # 6. Clear Flower state
+#     lxc_exec(cont, "rm -rf /root/.flwr/apps/ /root/.flwr/superlink/ 2>/dev/null")
+#     print(f"  {cont} cleaned.")
+
+
+# def start_superlink_tmux(server_cont: str, pane_id: str):
+#     print(f"  Starting SuperLink in pane {pane_id}...")
+#     tmux_run_in_cont(
+#         pane_id,
+#         server_cont,
+#         "FLWR_LOG_LEVEL=DEBUG flower-superlink --insecure 2>&1 | tee /tmp/superlink.log",
+#     )
+#     time.sleep(3)
+
+#     # Check for port error in log
+#     log_check = lxc_exec(
+#         server_cont,
+#         "grep -c 'Port.*already in use' /tmp/superlink.log 2>/dev/null || echo 0",
+#     )
+#     if int(log_check.strip().split("\n")[-1]) > 0:
+#         raise RuntimeError(
+#             f"SuperLink failed: Port already in use. Check /tmp/superlink.log on {server_cont}"
+#         )
+
+#     # Verify process is alive
+#     check = lxc_exec(server_cont, "pgrep -f flower-superlink && echo UP || echo FAILED")
+#     if "UP" not in check:
+#         raise RuntimeError(f"SuperLink failed to start on {server_cont}.")
+#     print(f"  SuperLink running.")
+
+
+# def start_supernode_tmux(
+#     cont: str, server_ip: str, partition_id: int, num_partitions: int, pane_id: str
+# ):
+#     """Start a local SuperNode in a visible tmux pane."""
+#     print(f"  {cont} → partition-id={partition_id} (tmux pane {pane_id})")
+#     tmux_run_in_cont(
+#         pane_id,
+#         cont,
+#         f"flower-supernode --insecure "
+#         f"--superlink {server_ip}:9092 "
+#         f"--node-config 'partition-id={partition_id} num-partitions={num_partitions}' "
+#         f"2>&1 | tee /tmp/supernode_{cont}.log",
+#     )
+
+
+# def start_supernode_background(
+#     cont: str, server_ip: str, partition_id: int, num_partitions: int
+# ):
+#     """
+#     Start a remote SuperNode in a detached tmux session inside the container.
+#     - Survives launcher exit and Ctrl+C
+#     - Can be attached to later with:
+#       lxc exec <cont> -- tmux attach -t supernode
+#     """
+#     print(
+#         f"  {cont} → partition-id={partition_id} " f"(detached tmux inside container)"
+#     )
+
+#     supernode_cmd = (
+#         f"cd fl_app && source venv/bin/activate && "
+#         f"flower-supernode "
+#         f"--insecure "
+#         f"--superlink {server_ip}:9092 "
+#         f"--node-config 'partition-id={partition_id} num-partitions={num_partitions}' "
+#         f"2>&1 | tee /tmp/supernode_{cont}.log"
+#     )
+
+#     # Kill any existing supernode tmux session first
+#     lxc_exec(cont, "tmux kill-session -t supernode 2>/dev/null; sleep 0.5")
+
+#     # Start a new detached tmux session inside the container running the supernode
+#     lxc_exec(
+#         cont,
+#         f'tmux new-session -d -s supernode -x 200 -y 50 "{supernode_cmd}"',
+#     )
+
+
+# def wait_for_nodes(
+#     server_cont: str, expected: int, has_remote: bool = False, timeout: int = 180
+# ) -> bool:
+#     print(f"\nWaiting for {expected} nodes to connect (timeout={timeout}s)...")
+#     start = time.time()
+#     count = 0
+
+#     while time.time() - start < timeout:
+#         result = lxc_exec(
+#             server_cont,
+#             "grep -c 'ActivateNode' /tmp/superlink.log 2>/dev/null || echo 0",
+#         )
+#         try:
+#             count = int(result.strip().split("\n")[-1])
+#         except ValueError:
+#             count = 0
+
+#         elapsed = int(time.time() - start)
+#         print(f"  [{elapsed}s] {count}/{expected} nodes connected", end="\r")
+
+#         if count >= expected:
+#             print(f"\n  All {expected} nodes connected after {elapsed}s.")
+#             if has_remote:
+#                 print("  Waiting for remote ClientApps to initialize...")
+#                 for _ in range(30):  # Max 30s wait
+#                     log = lxc_exec(
+#                         server_cont,
+#                         "grep -c 'ClientApp' /tmp/superlink.log 2>/dev/null || echo 0",
+#                     )
+#                     try:
+#                         client_apps_started = int(log.strip().split("\n")[-1])
+#                     except ValueError:
+#                         client_apps_started = 0
+
+#                     if client_apps_started >= expected:
+#                         print("  All ClientApps initialized.")
+#                         break
+#                     time.sleep(1)
+#                 else:
+#                     print(
+#                         "  Warning: Timeout waiting for ClientApp init. Proceeding anyway."
+#                     )
+#             return True
+
+#         time.sleep(5)
+
+#     print(f"\n  TIMEOUT: only {count}/{expected} nodes connected.")
+#     return False
+
+
+# def collect_logs(clients: list):
+#     print("\n=== Supernode Logs ===")
+#     for cont in clients:
+#         print(f"\n--- {cont} ---")
+#         print(
+#             lxc_exec(
+#                 cont, f"tail -20 /tmp/supernode_{cont}.log 2>/dev/null || echo 'no log'"
+#             )
+#         )
+
+
+# def wait_for_port_open(cont: str, ip: str, port: int, timeout: int = 30) -> bool:
+#     """Wait until a port is accepting connections (from inside the container)."""
+#     print(f"  Waiting for {ip}:{port} to be ready...")
+#     start = time.time()
+#     while time.time() - start < timeout:
+#         # Use bash built-in tcp test (no netcat dependency)
+#         result = lxc_exec(
+#             cont,
+#             f"""
+#             timeout 1 bash -c 'echo > /dev/tcp/{ip}/{port}' 2>/dev/null && echo OPEN || echo CLOSED
+#         """,
+#             ignore_errors=True,
+#         )
+#         if "OPEN" in result:
+#             print(f"  Port {port} is ready.")
+#             return True
+#         time.sleep(1)
+#     print(f"  Timeout waiting for port {port}")
+#     return False
+
+
+# # ── Main launcher ─────────────────────────────────────────────────────────────
+
+
+# def start_fed_training(
+#     containers: list,
+#     server_cont: str,
+#     pyproject_path: str = ".",
+#     node_ready_timeout: int = 180,
+# ):
+#     """
+#     Federated learning launcher with tmux visibility for local containers.
+
+#     Run on BOTH hosts with identical arguments.
+#     - Server host: opens tmux panes for all local containers + flwr run pane
+#     - Client host: opens tmux panes for local containers, remote ones run in background
+#     - Partition IDs derived from globally sorted list — consistent across both hosts
+#     """
+
+#     all_containers = sorted(containers)
+#     clients = [c for c in all_containers if c != server_cont]
+#     num_partitions = len(clients)
+#     partition_map = {cont: i for i, cont in enumerate(clients)}
+#     server_ip = get_server_ip(server_cont)
+
+#     local_conts = get_local_containers()
+#     is_server_host = server_cont in local_conts
+#     my_local_clients = [c for c in clients if c in local_conts]
+#     my_remote_clients = [c for c in clients if c not in local_conts]
+
+#     print(f"{'='*55}")
+#     print(f"Role:           {'SERVER HOST' if is_server_host else 'CLIENT HOST'}")
+#     print(f"Server:         {server_cont} ({server_ip})")
+#     print(f"Local clients:  {my_local_clients}")
+#     print(f"Remote clients: {my_remote_clients}")
+#     print(
+#         f"Partition map:  { {c: partition_map[c] for c in my_local_clients + my_remote_clients} }"
+#     )
+#     print(f"{'='*55}\n")
+
+#     # ── 1. Clean ──────────────────────────────────────────────────────────────
+#     print("=== Cleaning stale state ===")
+#     clean_targets = ([server_cont] if is_server_host else []) + my_local_clients
+#     for cont in clean_targets:
+#         cleanup_container(cont)
+
+#     # ── 2. Set up tmux session ────────────────────────────────────────────────
+#     print(f"\n=== Setting up tmux session '{SESSION}' ===")
+#     tmux_new_session()
+
+#     # Track pane IDs — first pane already exists after new-session
+#     result = subprocess.run(
+#         ["tmux", "list-panes", "-t", SESSION, "-F", "#{pane_id}"],
+#         capture_output=True,
+#         text=True,
+#     )
+#     pane_ids = [result.stdout.strip()]  # first pane
+
+#     # Create one pane per local container that needs one
+#     local_conts_needing_pane = (
+#         [server_cont] if is_server_host else []
+#     ) + my_local_clients
+#     # First pane goes to server (or first client if not server host)
+#     # Remaining panes are split
+#     for _ in range(len(local_conts_needing_pane) - 1):
+#         pane_id = tmux_new_pane()
+#         pane_ids.append(pane_id)
+#         time.sleep(0.2)
+
+#     # Add one more pane for flwr run on server host
+#     if is_server_host:
+#         run_pane = tmux_new_pane()
+#         time.sleep(0.2)
+#     else:
+#         run_pane = None
+
+#     tmux_tile()
+#     time.sleep(0.5)
+
+#     # ── 3. Start SuperLink in first pane (server host only) ───────────────────
+#     pane_cursor = 0
+#     if is_server_host:
+#         print(f"\n=== Starting SuperLink ===")
+#         start_superlink_tmux(server_cont, pane_ids[pane_cursor])
+#         pane_cursor += 1
+
+#         wait_for_port_open(server_cont, server_ip, 9092, timeout=20)
+
+#     # ── 4. Start local SuperNodes in tmux panes ───────────────────────────────
+#     if my_local_clients:
+#         print(f"\n=== Starting local SuperNodes (tmux) ===")
+#         for cont in my_local_clients:
+#             start_supernode_tmux(
+#                 cont,
+#                 server_ip,
+#                 partition_map[cont],
+#                 num_partitions,
+#                 pane_ids[pane_cursor],
+#             )
+#             pane_cursor += 1
+#             time.sleep(0.5)
+
+#     # ── 5. Start remote SuperNodes in background ──────────────────────────────
+#     # if my_remote_clients:
+#     #     print(f"\n=== Starting remote SuperNodes (background) ===")
+#     #     for cont in my_remote_clients:
+#     #         start_supernode_background(
+#     #             cont, server_ip, partition_map[cont], num_partitions
+#     #         )
+
+#     # ── 6. Server host: wait then run ─────────────────────────────────────────
+#     if is_server_host:
+#         # all_ready = wait_for_nodes(server_cont, num_partitions, node_ready_timeout)
+#         all_ready = wait_for_nodes(
+#             server_cont,
+#             num_partitions,
+#             has_remote=len(my_remote_clients) > 0,
+#             timeout=node_ready_timeout,
+#         )
+
+#         if not all_ready:
+#             collect_logs(my_local_clients + my_remote_clients)
+#             raise RuntimeError(
+#                 "Not all nodes connected in time. "
+#                 "Ensure the client host has also called start_fed_training()."
+#             )
+
+#         print(f"\n=== Starting flwr run ===")
+#         tmux_run_in_cont(
+#             run_pane,
+#             server_cont,
+#             # f"flwr run {pyproject_path} local-deployment --stream 2>&1 | tee /tmp/flwr_run.log",
+#             f"cd /root/fl_app && flwr run {pyproject_path} --stream 2>&1 | tee /tmp/flwr_run.log",
+#         )
+#         tmux_tile()
+#         print(f"\nTraining started.")
+#         print(f"Attach to tmux session to watch:  tmux attach -t {SESSION}")
+
+#     else:
+#         # Client host: keep supernodes alive, restart if they die
+#         print(f"\nClient host ready.")
+#         print(f"Attach to watch:  tmux attach -t {SESSION}")
+#         for cont in my_local_clients:
+#             print(f"  lxc exec {cont} -- tmux attach -t supernode")
+#         print(f"\nTerminal is free. Training is running.")
 
 
 # def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
@@ -517,59 +517,59 @@ def start_fed_training(
 #     cmd("tmux select-layout tiled")
 
 
-# def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
-#     containers = sorted(containers)
+def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
+    containers = sorted(containers)
 
-#     def send_keys(pane: int, keys: str):
-#         return ["tmux", "send-keys", "-t", f"0.{pane}", keys, "C-m"]
+    def send_keys(pane: int, keys: str):
+        return ["tmux", "send-keys", "-t", f"0.{pane}", keys, "C-m"]
 
-#     def is_local_cont(cont: str) -> bool:
-#         local_conts = get_container_names()
-#         if cont in local_conts:
-#             return True
-#         else:
-#             return False
+    def is_local_cont(cont: str) -> bool:
+        local_conts = get_container_names()
+        if cont in local_conts:
+            return True
+        else:
+            return False
 
-#     # Create session
-#     cmd("tmux new-session -d -s fl")
+    # Create session
+    cmd("tmux new-session -d -s fl")
 
-#     pane = 0  # track pane index
+    pane = 0  # track pane index
 
-#     # Start server in pane 0
-#     if is_local_cont(server_cont):
-#         id = get_host_id("vm", server_cont)
-#         server_ip = f"10.0.200.{id}"
-#         cmd(send_keys(pane, f"lxc shell {server_cont}"))
-#         cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
-#         cmd(send_keys(pane, "flower-superlink --insecure"))
-#     else:
-#         id = server_cont[5:]
-#         server_ip = f"10.0.200.{id}"
+    # Start server in pane 0
+    if is_local_cont(server_cont):
+        id = get_host_id("vm", server_cont)
+        server_ip = f"10.0.200.{id}"
+        cmd(send_keys(pane, f"lxc shell {server_cont}"))
+        cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
+        cmd(send_keys(pane, "flower-superlink --insecure"))
+    else:
+        id = server_cont[5:]
+        server_ip = f"10.0.200.{id}"
 
-#     # Start clients, each in their own pane
-#     clients = [c for c in containers if c != server_cont]
-#     nbr_parts = len(clients)
-#     for i, cont in enumerate(clients):
-#         pane += 1
-#         cmd(["tmux", "split-window", "-t", "fl", "-h"])
-#         if is_local_cont(cont):
-#             cmd(send_keys(pane, f"lxc shell {cont}"))
-#             cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
-#             cmd(
-#                 send_keys(
-#                     pane,
-#                     f"flower-supernode --insecure --superlink {server_ip}:9092 "
-#                     f"--node-config 'partition-id={i} num-partitions={nbr_parts}'",
-#                 )
-#             )
+    # Start clients, each in their own pane
+    clients = [c for c in containers if c != server_cont]
+    nbr_parts = len(clients)
+    for i, cont in enumerate(clients):
+        pane += 1
+        cmd(["tmux", "split-window", "-t", "fl", "-h"])
+        if is_local_cont(cont):
+            cmd(send_keys(pane, f"lxc shell {cont}"))
+            cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
+            cmd(
+                send_keys(
+                    pane,
+                    f"flower-supernode --insecure --superlink {server_ip}:9092 "
+                    f"--node-config 'partition-id={i} num-partitions={nbr_parts}'",
+                )
+            )
 
-#     # Start flwr run in a new pane
-#     if is_local_cont(server_cont):
-#         pane += 1
-#         cmd(["tmux", "split-window", "-t", "fl", "-h"])
-#         cmd(send_keys(pane, f"lxc shell {server_cont}"))
-#         cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
-#         cmd(send_keys(pane, f"flwr run {pyproject_path} local-deployment --stream"))
+    # Start flwr run in a new pane
+    if is_local_cont(server_cont):
+        pane += 1
+        cmd(["tmux", "split-window", "-t", "fl", "-h"])
+        cmd(send_keys(pane, f"lxc shell {server_cont}"))
+        cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
+        cmd(send_keys(pane, f"flwr run {pyproject_path} local-deployment --stream"))
 
 
 def save_original_toml(container: str):
