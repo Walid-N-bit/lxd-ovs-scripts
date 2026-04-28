@@ -151,7 +151,6 @@ def get_tmux_panes_nbr() -> int:
     return int(cmd("tmux display-message -p '#{window_panes}'"))
 
 
-
 def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
     """
     create tmux session and panes for each client/server process. Start flwr application.
@@ -185,9 +184,32 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             send_keys(pane, c, session)
             time.sleep(1.5)
 
-    # shelved for later
-    # def check_supernodes_connect() -> bool:
-    #     return
+    def assign_panes_to_clients(
+        clients_info: dict[str,dict],
+        local_clients: list,
+        session_name: str,
+        is_server_local: bool,
+    ) -> dict[str,dict]:
+        """
+        update pane information for clients in the local host.
+
+        :param clients_info: {client_name:{"pane":int}}
+        :type clients_info: dict[dict]
+        :param local_clients: list of local host clients
+        :type local_clients: list
+        :param session_name: tmux session
+        :type session_name: str
+        :param is_server_local: True if server container is on this host
+        :type is_server_local: bool
+        :return: updated clients pane info
+        :rtype: dict[dict, Any]
+        """
+        start_nbr = 1 if is_server_local else 0
+        for i, cont in enumerate(local_clients, start_nbr):
+            cmd(["tmux", "split-window", "-t", session_name, "-h"])
+            clients_info[cont].update({"pane": i})
+            print(f"{cont}: {clients_info[cont]}")
+        return clients_info
 
     # Process steps:
 
@@ -230,17 +252,10 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
 
     # pair of client and their pane in th session (server gets 0)
     bordered_print("Creating panes")
-    if is_server_local:
-        for i, cont in enumerate(local_clients, 1):
-            cmd(["tmux", "split-window", "-t", session_name, "-h"])
-            clients_info[cont].update({"pane": i})
-            print(f"{cont}: {clients_info[cont]}")
 
-    else:
-        for i, cont in enumerate(local_clients):
-            cmd(["tmux", "split-window", "-t", session_name, "-h"])
-            clients_info[cont].update({"pane": i})
-            print(f"{cont} done")
+    clients_info = assign_panes_to_clients(
+        clients_info, local_clients, session_name, is_server_local
+    )
 
     cmd(["tmux", "select-layout", "tiled"])
 
@@ -271,8 +286,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         if cont in local_clients:
             sn_id = clients_info.get(cont).get("supernode-id")
             pane = clients_info.get(cont).get("pane")
-            # supernode_command = f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
-            supernode_command = f"flower-supernode --insecure --superlink 0.0.0.0:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
+            supernode_command = f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
             send_keys(pane, supernode_command, session_name)
 
     #   9. check if all clients (local and remote) have connected
