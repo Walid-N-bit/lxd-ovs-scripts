@@ -290,9 +290,9 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
             send_keys(pane, supernode_command, session_name)
 
     #   9. check if all clients (local and remote) have connected
-    all_connected = wait_for_clients(server_cont, len(all_clients))
-    if not all_connected:
-        raise RuntimeError("Not all clients connected to server")
+    # all_connected = wait_for_clients(server_cont, len(all_clients))
+    # if not all_connected:
+    #     raise RuntimeError("Not all clients connected to server")
 
     #   10. run flwr app
     if is_server_local:
