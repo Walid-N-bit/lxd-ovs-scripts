@@ -182,14 +182,13 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         ]
         for c in cont_commands:
             send_keys(pane, c, session)
-            time.sleep(1.5)
 
     def assign_panes_to_clients(
-        clients_info: dict[str,dict],
+        clients_info: dict[str, dict],
         local_clients: list,
         session_name: str,
         is_server_local: bool,
-    ) -> dict[str,dict]:
+    ) -> dict[str, dict]:
         """
         update pane information for clients in the local host.
 
@@ -293,7 +292,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     # if not all_connected:
     #     raise RuntimeError("Not all clients connected to server")
     print("\nWaiting for all clients to connect...\n")
-    time.sleep(60)
+    time.sleep(5)
     #   10. run flwr app
     if is_server_local:
         cmd(["tmux", "split-window", "-t", session_name, "-h"])
