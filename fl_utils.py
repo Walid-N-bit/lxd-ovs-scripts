@@ -278,7 +278,6 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     if is_server_local:
         init_cont(server_cont, 0, session_name)
         send_keys(0, superlink_command, session_name)
-    time.sleep(2)
 
     #   8. launch supernodes in local containers
     bordered_print("Starting SuperNodes")
@@ -293,7 +292,8 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     # all_connected = wait_for_clients(server_cont, len(all_clients))
     # if not all_connected:
     #     raise RuntimeError("Not all clients connected to server")
-
+    print("\nWaiting for all clients to connect...\n")
+    time.sleep(15)
     #   10. run flwr app
     if is_server_local:
         cmd(["tmux", "split-window", "-t", session_name, "-h"])
