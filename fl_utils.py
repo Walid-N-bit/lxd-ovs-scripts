@@ -293,7 +293,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     # if not all_connected:
     #     raise RuntimeError("Not all clients connected to server")
     print("\nWaiting for all clients to connect...\n")
-    time.sleep(15)
+    time.sleep(35)
     #   10. run flwr app
     if is_server_local:
         cmd(["tmux", "split-window", "-t", session_name, "-h"])
