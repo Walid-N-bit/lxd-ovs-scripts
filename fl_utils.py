@@ -144,6 +144,15 @@ def wait_for_clients(server_cont: str, expected: int, timeout: int = 90) -> bool
     return False
 
 
+def get_tmux_panes_nbr() -> int:
+    """
+    return the number of panes in the current tmux window
+    """
+    return int(cmd("tmux display-message -p '#{window_panes}'"))
+
+
+def 
+
 def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
     """
     create tmux session and panes for each client/server process. Start flwr application.
@@ -192,9 +201,7 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     all_clients = sorted(local_clients + remote_clients)
     if server_cont in all_clients:
         all_clients.remove(server_cont)
-    clients_info = {
-        cont: {"supernode-id": i, "pane": 0} for i, cont in enumerate(all_clients)
-    }
+    clients_info = {cont: {"supernode-id": i} for i, cont in enumerate(all_clients)}
 
     print(f"\n{all_clients = }\n")
 
@@ -262,11 +269,12 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     #   8. launch supernodes in local containers
     bordered_print("Starting SuperNodes")
     for cont in clients_info:
-        sn_id = clients_info.get(cont).get("supernode-id")
-        pane = clients_info.get(cont).get("pane")
-        # supernode_command = f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
-        supernode_command = f"flower-supernode --insecure --superlink 0.0.0.0:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
-        send_keys(pane, supernode_command, session_name)
+        if cont in local_clients:
+            sn_id = clients_info.get(cont).get("supernode-id")
+            pane = clients_info.get(cont).get("pane")
+            # supernode_command = f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
+            supernode_command = f"flower-supernode --insecure --superlink 0.0.0.0:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
+            send_keys(pane, supernode_command, session_name)
 
     #   9. check if all clients (local and remote) have connected
     all_connected = wait_for_clients(server_cont, len(all_clients))
