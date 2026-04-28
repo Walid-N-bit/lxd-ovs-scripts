@@ -151,7 +151,6 @@ def get_tmux_panes_nbr() -> int:
     return int(cmd("tmux display-message -p '#{window_panes}'"))
 
 
-def 
 
 def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
     """
