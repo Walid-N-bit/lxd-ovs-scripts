@@ -60,29 +60,44 @@ def wait_for_ports_free(cont: str, ports: list[int], timeout: int = 10) -> bool:
 
 
 def cleanup_flower_state(containers: list, server_cont: str):
-    """Kill stale Flower processes and force-release ports."""
-    targets = list(set(containers + [server_cont]))
+    """Kill stale Flower processes and force-release ports on relevant containers."""
+    # Only clean containers this host can actually reach
+    all_local = get_container_names()
+    targets = [c for c in set(containers + [server_cont]) if c in all_local]
+
     for cont in targets:
-        # 1. Kill processes (double quotes outer, single quotes inner)
-        cmd(
-            f"lxc exec {cont} -- bash -c \"pkill -9 -f 'flower-' 2>/dev/null || true; "
-            f"pkill -9 -f 'flwr ' 2>/dev/null || true; "
-            f"pkill -9 -f 'ray::' 2>/dev/null || true; sleep 1\"",
+        print(f"  Cleaning {cont}...")
+
+        # 1. Kill by process name (simple, reliable)
+        cmd(f"lxc exec {cont} -- pkill -9 -f 'flower-' 2>/dev/null || true", shell=True)
+        cmd(f"lxc exec {cont} -- pkill -9 -f 'flwr ' 2>/dev/null || true", shell=True)
+        cmd(f"lxc exec {cont} -- pkill -9 -f 'ray::' 2>/dev/null || true", shell=True)
+
+        # 2. Kill by port using fuser (if available) or ss+kill fallback
+        for port in [9092, 9093, 9094]:
+            # Try fuser first (cleanest)
+            cmd(
+                f"lxc exec {cont} -- command -v fuser >/dev/null && fuser -k {port}/tcp 2>/dev/null || true",
+                shell=True,
+            )
+            # Fallback: parse ss output and kill PID
+            pid_cmd = f'lxc exec {cont} -- bash -c \'ss -tlnp 2>/dev/null | grep ":{port} " | grep -oP "pid=\\K[0-9]+" | head -1\''
+            pid = cmd(pid_cmd, shell=True).strip()
+            if pid and pid.isdigit():
+                cmd(f"lxc exec {cont} -- kill -9 {pid} 2>/dev/null || true", shell=True)
+
+        # 3. Wait for kernel to release sockets (longer for safety)
+        time.sleep(3)
+
+        # 4. Verify ports are actually free
+        check = cmd(
+            f"lxc exec {cont} -- ss -tlnp | grep -E ':(9092|9093|9094) ' || echo FREE",
             shell=True,
         )
-
-        # 2. Force-kill by port (properly escaped)
-        for port in [9092, 9093, 9094]:
-            kill_cmd = (
-                f"lxc exec {cont} -- bash -c "
-                f"\"pid=$(ss -tlnp 2>/dev/null | grep ':{port} ' | grep -oP 'pid=\\\\K[0-9]+' | head -1); "
-                f'[ -n \\"$pid\\" ] && kill -9 \\"$pid\\" 2>/dev/null || true"'
-            )
-            cmd(kill_cmd, shell=True)
-
-        # 3. Let kernel release sockets
-        time.sleep(2)
-        print(f"  Cleaned {cont}")
+        if "FREE" not in check:
+            print(f"  Warning: Ports still busy on {cont}:\n{check.strip()}")
+        else:
+            print(f"  {cont} cleaned and ports free")
 
 
 def count_connected_nodes(
@@ -249,7 +264,8 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
     for cont in clients_info:
         sn_id = clients_info.get(cont).get("supernode-id")
         pane = clients_info.get(cont).get("pane")
-        supernode_command = f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
+        # supernode_command = f"flower-supernode --insecure --superlink {server_ip}:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
+        supernode_command = f"flower-supernode --insecure --superlink 0.0.0.0:9092 --node-config 'partition-id={sn_id} num-partitions={len(all_clients)}'"
         send_keys(pane, supernode_command, session_name)
 
     #   9. check if all clients (local and remote) have connected
