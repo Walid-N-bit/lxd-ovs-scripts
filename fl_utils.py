@@ -306,57 +306,6 @@ def start_fed_training(containers: list, server_cont: str, pyproject_path: str =
         )
 
 
-# def start_fed_training(containers: list, server_cont: str, pyproject_path: str = "."):
-#     containers = sorted(containers)
-
-#     def is_local_cont(cont: str) -> bool:
-#         local_conts = get_container_names()
-#         if cont in local_conts:
-#             return True
-#         else:
-#             return False
-
-#     # Create session
-#     cmd("tmux new-session -d -s fl")
-
-#     pane = 0  # track pane index
-
-#     # Start server in pane 0
-#     if is_local_cont(server_cont):
-#         id = get_host_id("vm", server_cont)
-#         server_ip = f"10.0.200.{id}"
-#         cmd(send_keys(pane, f"lxc shell {server_cont}"))
-#         cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
-#         cmd(send_keys(pane, "flower-superlink --insecure"))
-#     else:
-#         id = server_cont[5:]
-#         server_ip = f"10.0.200.{id}"
-
-#     # Start clients, each in their own pane
-#     clients = [c for c in containers if c != server_cont]
-#     nbr_parts = len(clients)
-#     for i, cont in enumerate(clients):
-#         pane += 1
-#         cmd(["tmux", "split-window", "-t", "fl", "-h"])
-#         if is_local_cont(cont):
-#             cmd(send_keys(pane, f"lxc shell {cont}"))
-#             cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
-#             cmd(
-#                 send_keys(
-#                     pane,
-#                     f"flower-supernode --insecure --superlink {server_ip}:9092 "
-#                     f"--node-config 'partition-id={i} num-partitions={nbr_parts}'",
-#                 )
-#             )
-
-#     # Start flwr run in a new pane
-#     if is_local_cont(server_cont):
-#         pane += 1
-#         cmd(["tmux", "split-window", "-t", "fl", "-h"])
-#         cmd(send_keys(pane, f"lxc shell {server_cont}"))
-#         cmd(send_keys(pane, "cd fl_app ; source venv/bin/activate"))
-#         cmd(send_keys(pane, f"flwr run {pyproject_path} local-deployment --stream"))
-
 
 def save_original_toml(container: str):
     cont_in = "scp /root/fl_app/pyproject.toml /root/data/pyproject_original.toml"
