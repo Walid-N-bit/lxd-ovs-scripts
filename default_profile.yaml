@@ -38,6 +38,7 @@ devices:
     type: nic
   gpu:
     type: gpu
+    nvidia.runtime: "true"
   root:
     path: /
     pool: default-LXDPool
