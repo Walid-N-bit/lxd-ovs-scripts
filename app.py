@@ -388,10 +388,10 @@ def main():
                 "\n### Update and upgrade ###",
                 "sudo apt update -y && sudo apt upgrade -y",
             ),
-            (
-                "\n### Nvidia driver install ###",
-                f"sudo apt install nvidia-utils-{version} -y",
-            ),
+            # (
+            #     "\n### Nvidia driver install ###",
+            #     f"sudo apt install nvidia-utils-{version} -y",
+            # ),
             (
                 "\n### Python venv and pip install ###",
                 "sudo apt install -y git python3-pip && sudo apt install python3-venv -y",
