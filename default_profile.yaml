@@ -7,6 +7,7 @@ config:
       eth0:
         dhcp4: false
         dhcp6: false
+        mtu: 1400
       eth1:
         addresses: [lxdbr0_ip.eth1_host/lxdbr0_netmask]
         dhcp4: false
@@ -20,6 +21,7 @@ config:
       vlan_iface:
         id: vlan_id
         link: eth0
+        mtu: 1400
         addresses: [10.0.vlan_id.vlan_host/24]
         nameservers:
           addresses: [130.231.240.1, 130.231.240.7]
@@ -32,6 +34,7 @@ devices:
     nictype: bridged
     parent: ovs_br
     type: nic
+    mtu: 1400
   eth1:
     nictype: bridged
     parent: lxdbr0
