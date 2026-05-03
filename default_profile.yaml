@@ -1,6 +1,7 @@
 name: new-profile
 description: ""
 config:
+  nvidia.runtime: "true"
   user.network-config: |
     version: 2
     ethernets:
@@ -41,7 +42,6 @@ devices:
     type: nic
   gpu:
     type: gpu
-    nvidia.runtime: "true"
   root:
     path: /
     pool: default-LXDPool
