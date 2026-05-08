@@ -140,7 +140,8 @@ def create_queues(queue_rates: list[int], qos: str = QOS):
     """
     in_1 = []
     in_2 = []
-    for i, rate in enumerate(queue_rates):
+    # enumeration starts from 1 in order to reserve 0 for default queue
+    for i, rate in enumerate(queue_rates, 1):
         in_1.append(f"queues:{i}=@{i}")
         in_2.append(f"--id=@{i} create queue other-config:max-rate={rate}")
 
