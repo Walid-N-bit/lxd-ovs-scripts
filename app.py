@@ -360,7 +360,10 @@ def main():
 
             case "qos":
                 port = input("\nProvide the egress port: ").strip()
-                default_rate = input("\nDefault traffic rate (bps): ").strip()
+                default_rate = (
+                    input("\nDefault traffic rate (Default=1000000000Bps): ").strip()
+                    or "1000000000"
+                )
                 create_qos(port, default_rate)
 
             case "queues":
