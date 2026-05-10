@@ -70,6 +70,8 @@ def edit_yaml(
         .replace("lxdbr0_netmask", f"{lxdbr0_netmask}")
     )
     profile_data["config"]["user.network-config"] = new_config
+    profile_data["devices"]["eth0"]["host_name"] = f"cont-{host_id}"
+    profile_data["devices"]["eth1"]["host_name"] = f"cont-{host_id}-lxdbr0"
     profile_data["devices"]["eth0"]["parent"] = ovs_br
     print(f"\nCreating profile for 10.0.{vlan_id}.{host_id}...", end=" ")
     try:
