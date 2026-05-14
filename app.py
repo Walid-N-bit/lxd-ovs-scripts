@@ -270,19 +270,6 @@ def run_test():
     )
 
 
-# def get_container_names() -> list[str]:
-#     """
-#     return a list of container names in the host
-
-#     :return: container names
-#     :rtype: list[str]
-#     """
-#     input = "lxc list -c n -f csv"
-#     output = cmd(input)
-#     containers = [c for c in output.splitlines() if ("cont-" in c)]
-#     return containers
-
-
 def clone_to_container(name: str):
     """
     download a repo into a container
