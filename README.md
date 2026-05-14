@@ -42,8 +42,8 @@ Before installing, make sure the following are available on your host machine:
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
-cd <repo-directory>
+git clone https://github.com/Walid-N-bit/SDN-Federated-Learning-Automation-Tool.git
+cd SDN-Federated-Learning-Automation-Tool
 ```
 
 ### 2. Create a Python virtual environment
@@ -86,7 +86,7 @@ mkdir -p measurements_data
 Before using the tool, set the `FL_REPO` variable at the top of `main.py` to point to your Federated Learning application repository:
 
 ```python
-FL_REPO = "https://github.com/your-org/your-fl-app.git"
+FL_REPO = "https://github.com/your-org/<your-fl-app>.git"
 ```
 
 Also ensure your SDN controller address is defined in the imported `bridges` module (referenced as `CONTROLLER`).
